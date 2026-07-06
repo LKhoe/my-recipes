@@ -26,23 +26,23 @@ export function ScalableIngredients({
   return (
     <div>
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-display-sm text-foreground">Ingredients</h2>
+        <h2 className="font-display text-display-sm text-foreground">Ingredientes</h2>
         {originalServings && servings && (
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => update(servings - 1)}
               className="flex size-7 items-center justify-center rounded-full border border-border text-foreground hover:bg-muted"
-              aria-label="Fewer servings"
+              aria-label="Menos porções"
             >
               <Minus className="size-3.5" />
             </button>
-            <span className="min-w-16 text-center text-sm text-muted-foreground">{servings} servings</span>
+            <span className="min-w-16 text-center text-sm text-muted-foreground">{servings} porções</span>
             <button
               type="button"
               onClick={() => update(servings + 1)}
               className="flex size-7 items-center justify-center rounded-full border border-border text-foreground hover:bg-muted"
-              aria-label="More servings"
+              aria-label="Mais porções"
             >
               <Plus className="size-3.5" />
             </button>

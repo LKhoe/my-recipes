@@ -26,7 +26,7 @@ export function GenerateFromRecipes({ recipes }: { recipes: { id: string; title:
 
   async function handleGenerate() {
     if (selected.size === 0) {
-      toast.error("Pick at least one recipe.");
+      toast.error("Escolha pelo menos uma receita.");
       return;
     }
     setLoading(true);
@@ -40,13 +40,13 @@ export function GenerateFromRecipes({ recipes }: { recipes: { id: string; title:
       setSelected(new Set());
       router.refresh();
     } else {
-      toast.error("Could not generate shopping list");
+      toast.error("Não foi possível gerar a lista de compras");
     }
   }
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
-      <Input placeholder="Search recipes…" value={query} onChange={(e) => setQuery(e.target.value)} />
+      <Input placeholder="Buscar receitas…" value={query} onChange={(e) => setQuery(e.target.value)} />
       <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
         {filtered.map((r) => (
           <label key={r.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted">
@@ -54,10 +54,14 @@ export function GenerateFromRecipes({ recipes }: { recipes: { id: string; title:
             {r.title}
           </label>
         ))}
-        {filtered.length === 0 && <p className="px-2 py-1.5 text-xs text-muted-foreground">No recipes found</p>}
+        {filtered.length === 0 && <p className="px-2 py-1.5 text-xs text-muted-foreground">Nenhuma receita encontrada</p>}
       </div>
       <Button type="button" onClick={handleGenerate} disabled={loading} className="self-start">
-        {loading ? "Generating…" : `Generate from ${selected.size || ""} recipe${selected.size === 1 ? "" : "s"}`}
+        {loading
+          ? "Gerando…"
+          : selected.size === 0
+            ? "Gerar lista de compras"
+            : `Gerar a partir de ${selected.size} receita${selected.size === 1 ? "" : "s"}`}
       </Button>
     </div>
   );

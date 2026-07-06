@@ -29,14 +29,14 @@ export function RecipePickerPopover({
       <PopoverContent className="w-64 p-2">
         <Input
           autoFocus
-          placeholder="Search recipes…"
+          placeholder="Buscar receitas…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="mb-2"
         />
         <div className="flex max-h-56 flex-col gap-0.5 overflow-y-auto">
           {filtered.length === 0 && (
-            <p className="px-2 py-1.5 text-xs text-muted-foreground">No recipes found</p>
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">Nenhuma receita encontrada</p>
           )}
           {filtered.map((r) => (
             <button

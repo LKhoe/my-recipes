@@ -58,13 +58,13 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
         <div>
           <h1 className="font-display text-display-xl text-foreground">{recipe.title}</h1>
           {recipe.authorName && (
-            <p className="mt-1 text-sm text-muted-foreground">by {recipe.authorName}</p>
+            <p className="mt-1 text-sm text-muted-foreground">por {recipe.authorName}</p>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="outline" size="sm" asChild>
             <Link href={`/recipes/${recipe.id}/edit`}>
-              <Pencil className="size-4" /> Edit
+              <Pencil className="size-4" /> Editar
             </Link>
           </Button>
           {isAuthor && <DeleteRecipeButton recipeId={recipe.id} />}
@@ -82,17 +82,17 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
       <div className="mt-4 flex flex-wrap gap-4 text-sm text-muted-foreground">
         {recipe.servings && (
           <span className="flex items-center gap-1.5">
-            <Users className="size-4" /> {recipe.servings} servings
+            <Users className="size-4" /> {recipe.servings} porções
           </span>
         )}
         {recipe.prepTime && (
           <span className="flex items-center gap-1.5">
-            <Clock className="size-4" /> {recipe.prepTime} min prep
+            <Clock className="size-4" /> {recipe.prepTime} min de preparo
           </span>
         )}
         {recipe.cookTime && (
           <span className="flex items-center gap-1.5">
-            <Clock className="size-4" /> {recipe.cookTime} min cook
+            <Clock className="size-4" /> {recipe.cookTime} min de cozimento
           </span>
         )}
       </div>
@@ -116,7 +116,7 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
         />
 
         <section>
-          <h2 className="font-display text-display-sm text-foreground">Steps</h2>
+          <h2 className="font-display text-display-sm text-foreground">Modo de preparo</h2>
           <ol className="mt-3 flex flex-col gap-4">
             {recipe.steps.map((step, i) => (
               <li key={i} className="flex gap-3">
@@ -137,8 +137,8 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
 
       {session?.user && (
         <section className="mt-10 border-t border-border pt-6">
-          <h2 className="font-display text-display-sm text-foreground">Your private notes</h2>
-          <p className="mt-1 text-xs text-muted-foreground">Only visible to you.</p>
+          <h2 className="font-display text-display-sm text-foreground">Suas notas privadas</h2>
+          <p className="mt-1 text-xs text-muted-foreground">Visível somente para você.</p>
           <div className="mt-3">
             <PrivateNotes recipeId={recipe.id} initialBody={noteBody} />
           </div>
@@ -147,7 +147,7 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
 
       {recipe.sourceUrl && (
         <p className="mt-10 text-xs text-muted-foreground">
-          Source:{" "}
+          Fonte:{" "}
           <a href={recipe.sourceUrl} target="_blank" rel="noreferrer" className="underline">
             {recipe.sourceUrl}
           </a>

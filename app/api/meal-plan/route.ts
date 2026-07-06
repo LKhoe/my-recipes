@@ -10,14 +10,14 @@ const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export async function GET(request: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
   const params = request.nextUrl.searchParams;
   const start = dateSchema.safeParse(params.get("start"));
   const end = dateSchema.safeParse(params.get("end"));
   if (!start.success || !end.success) {
-    return NextResponse.json({ error: "start and end (YYYY-MM-DD) are required" }, { status: 400 });
+    return NextResponse.json({ error: "start e end (AAAA-MM-DD) são obrigatórios" }, { status: 400 });
   }
 
   const entries = await listMealPlanEntries(start.data, end.data);
@@ -33,12 +33,12 @@ const bodySchema = z.object({
 export async function POST(request: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: "date, slot, and recipeId are required" }, { status: 400 });
+    return NextResponse.json({ error: "date, slot e recipeId são obrigatórios" }, { status: 400 });
   }
 
   const created = await addMealPlanEntry(

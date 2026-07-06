@@ -13,17 +13,17 @@ const bodySchema = z.object({
 export async function POST(request: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: "name is required" }, { status: 400 });
+    return NextResponse.json({ error: "name é obrigatório" }, { status: 400 });
   }
 
   const list = await getLatestShoppingList(session.user.id);
   if (!list) {
-    return NextResponse.json({ error: "Generate a shopping list first." }, { status: 404 });
+    return NextResponse.json({ error: "Gere uma lista de compras primeiro." }, { status: 404 });
   }
 
   const created = await addCustomShoppingListItem(

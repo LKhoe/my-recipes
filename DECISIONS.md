@@ -209,3 +209,50 @@ Choices made where SPEC.md was silent, with rationale. Newest last.
 - **`@types/node` bumped from `^20` to `^24`** to match the `engines.node >= 24` already declared
   — `^20`'s bundled types didn't recognize some Node 22+/24 stream APIs reached for during this
   phase.
+
+## pt-BR translation
+
+User request: translate the app to Brazilian Portuguese — pages in pt-BR, code stays in English
+(identifiers, comments, commit messages unaffected; only user-facing strings translated).
+
+- **Scope of "user-facing."** Interpreted broadly: every string a user actually reads —
+  page/component copy, `aria-label`/`alt`/`title` attributes, toast messages, and **API route
+  error strings**. The last one is easy to miss but matters: client code throughout the app does
+  `body?.error ?? "<pt-BR fallback>"`, so an API route returning an English `error` field would
+  silently override the Portuguese fallback and leak English text into the UI. Translated all of
+  them (`app/api/**/route.ts`) for this reason, not just the component-level strings.
+
+- **Category rows renamed in place, not re-seeded.** `lib/db/seed.ts`'s fixed list (SPEC §4.2)
+  now seeds Portuguese names for fresh installs, but the existing dev database already had English
+  rows with real recipe associations (`recipe_category` join rows keyed by `categoryId`, an
+  immutable id). Wrote a one-off script (`_translate-categories.ts`, deleted after running) that
+  `UPDATE`s `category.name` by matching the old English name — preserves ids/associations, so nothing
+  needed to be re-linked. Re-seeding would have created new rows with new ids, orphaning any
+  existing category assignments.
+
+- **Ingredient-parser unit vocabulary is bilingual (Portuguese + English), not Portuguese-only.**
+  Initially translated `UNIT_ALIASES` (`lib/services/ingredient-parser.ts`) to Portuguese-only,
+  but this parser is the JSON-LD import path (SPEC §4.6 step 1) — it parses `recipeIngredient`
+  text scraped verbatim from arbitrary third-party sites, many of which are English-language
+  (e.g. "2 tbsp olive oil"). A Portuguese-only vocabulary would silently misparse the unit as part
+  of the ingredient name for every such site. Asked the user directly on this one since it's a
+  real product tradeoff, not a copy question; confirmed bilingual support (both vocabularies
+  normalize to the same canonical pt-BR token — "tbsp" and "colher de sopa" both → "csp") is
+  wanted, so import quality doesn't regress for non-Portuguese sources while everything the user
+  actually reads or types stays pt-BR. The LLM extraction paths (4.6 step 2, 4.6b) don't need this
+  same treatment — the prompt already instructs the model to normalize to the pt-BR token set
+  regardless of the source language, since an LLM translates rather than pattern-matches.
+
+- **Canonical unit tokens changed to Portuguese abbreviations**: `cup`→`xíc`, `tbsp`→`csp`,
+  `tsp`→`cch`, `clove`→`dente`, `slice`→`fatia`, `piece`→`unidade`, `pinch`→`pitada`,
+  `dash`→`borrifo`, `bunch`→`maço`, `sprig`→`ramo`, `stick`→`tablete`, `package`/`pkg`→`pacote`.
+  These are the tokens stored in `RecipeIngredient.unit` / `ShoppingListItem.unit` and used for
+  shopping-list merge-key matching (`lib/shopping-list-merge.ts`) — changing them is safe for new
+  data since the merge only cares that two rows' unit strings are equal, not what they say.
+
+- **Decimal separator: comma, not period** (`formatScaledQuantity` in `lib/scale.ts`, via
+  `toLocaleString("pt-BR")`) — "2,5" not "2.5", per pt-BR convention. Only affects *display*
+  formatting; quantities are still stored as plain decimal numbers in Postgres.
+
+- **`<html lang="pt-BR">`** set in the root layout — matters for screen readers and browser
+  spell-check/translate-prompt heuristics, not just SEO.

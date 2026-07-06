@@ -1,5 +1,5 @@
 // SPEC §4.3 — proportional scaling plus display formatting: fraction-friendly for countable
-// units (1.33 eggs -> "1⅓ eggs"), practical rounding for weights/volumes (267 g, not 266.67 g).
+// units (1.33 ovos -> "1⅓ ovos"), practical rounding for weights/volumes (267 g, not 266,67 g).
 
 export function scaleQuantity(quantity: number, originalServings: number, targetServings: number): number {
   if (originalServings <= 0) return quantity;
@@ -7,19 +7,19 @@ export function scaleQuantity(quantity: number, originalServings: number, target
 }
 
 // Cooking units that are conventionally expressed as fractions (whole eggs, cloves of garlic,
-// cups/tbsp/tsp measures) rather than decimals.
+// xíc/csp/cch measures) rather than decimals. Portuguese unit vocabulary — see ingredient-parser.ts.
 const FRACTION_FRIENDLY_UNITS = new Set([
-  "cup",
-  "tbsp",
-  "tsp",
-  "clove",
-  "slice",
-  "piece",
-  "pinch",
-  "dash",
-  "bunch",
-  "sprig",
-  "stick",
+  "xíc",
+  "csp",
+  "cch",
+  "dente",
+  "fatia",
+  "unidade",
+  "pitada",
+  "borrifo",
+  "maço",
+  "ramo",
+  "tablete",
 ]);
 
 const COMMON_FRACTIONS: [number, string][] = [
@@ -56,9 +56,10 @@ function formatFractionFriendly(value: number): string {
   return whole > 0 ? `${whole}${best[1]}` : best[1];
 }
 
+// pt-BR uses a comma decimal separator ("2,5", not "2.5").
 function formatPracticalRounding(value: number): string {
   const rounded = value >= 10 ? Math.round(value) : Number(value.toFixed(1));
-  return rounded.toString();
+  return rounded.toLocaleString("pt-BR");
 }
 
 /** Formats a (possibly scaled) quantity for display, per unit conventions described above. */

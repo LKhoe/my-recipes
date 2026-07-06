@@ -26,13 +26,13 @@ describe("formatScaledQuantity", () => {
     expect(formatScaledQuantity(266.666, "g")).toBe("267");
   });
 
-  it("keeps a decimal for small weight values", () => {
-    expect(formatScaledQuantity(2.5, "g")).toBe("2.5");
+  it("keeps a decimal for small weight values, using a comma (pt-BR)", () => {
+    expect(formatScaledQuantity(2.5, "g")).toBe("2,5");
   });
 
-  it("treats cup/tbsp/tsp as fraction-friendly", () => {
-    expect(formatScaledQuantity(1.5, "cup")).toBe("1½");
-    expect(formatScaledQuantity(0.75, "tsp")).toBe("¾");
+  it("treats xíc/csp/cch as fraction-friendly", () => {
+    expect(formatScaledQuantity(1.5, "xíc")).toBe("1½");
+    expect(formatScaledQuantity(0.75, "cch")).toBe("¾");
   });
 
   it("rounds a fraction close to the next whole number up", () => {

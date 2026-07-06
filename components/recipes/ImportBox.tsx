@@ -33,7 +33,7 @@ export function ImportBox({ onImported }: { onImported: (draft: RecipeDraft) => 
         body: JSON.stringify({ url }),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body?.error ?? "Import failed.");
+      if (!res.ok) throw new Error(body?.error ?? "Falha na importação.");
       onImported(body as RecipeDraft);
     } catch (err) {
       setError((err as Error).message);
@@ -44,13 +44,13 @@ export function ImportBox({ onImported }: { onImported: (draft: RecipeDraft) => 
 
   return (
     <form onSubmit={handleImport} className="flex flex-col gap-3">
-      <Label htmlFor="import-url">Recipe or YouTube URL</Label>
+      <Label htmlFor="import-url">Link da receita ou do YouTube</Label>
       <div className="flex flex-col gap-2 sm:flex-row">
         <Input
           id="import-url"
           type="url"
           required
-          placeholder="https://example.com/recipe or a YouTube link"
+          placeholder="https://exemplo.com/receita ou um link do YouTube"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           disabled={loading}
@@ -61,7 +61,7 @@ export function ImportBox({ onImported }: { onImported: (draft: RecipeDraft) => 
               <Loader2 className="size-4 animate-spin" /> {elapsedSeconds}s
             </>
           ) : (
-            "Import"
+            "Importar"
           )}
         </Button>
       </div>

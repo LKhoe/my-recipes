@@ -12,7 +12,7 @@ export async function DELETE(
 ) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
   const { id: recipeId, imageId } = await params;
@@ -23,7 +23,7 @@ export async function DELETE(
     .returning({ path: recipeImage.path });
 
   if (!deleted) {
-    return NextResponse.json({ error: "Image not found" }, { status: 404 });
+    return NextResponse.json({ error: "Imagem não encontrada" }, { status: 404 });
   }
 
   await deleteImageFiles(deleted.path);

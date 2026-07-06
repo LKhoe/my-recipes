@@ -28,16 +28,16 @@ export function SendToKitchenButton({
     setLoading(false);
 
     if (res.ok) {
-      toast.success("Sent to kitchen");
+      toast.success("Enviado para a cozinha");
       router.refresh();
     } else {
-      toast.error("Could not send to kitchen");
+      toast.error("Não foi possível enviar para a cozinha");
     }
   }
 
   return (
     <Button type="button" variant={isActive ? "secondary" : "outline"} size="sm" disabled={loading} onClick={handleClick}>
-      <Utensils className="size-4" /> {isActive ? "Active in kitchen" : "Send to kitchen"}
+      <Utensils className="size-4" /> {isActive ? "Ativa na cozinha" : "Enviar para a cozinha"}
     </Button>
   );
 }

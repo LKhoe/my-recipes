@@ -18,17 +18,17 @@ const bodySchema = z.object({
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ itemId: string }> }) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
   const { itemId } = await params;
   if (!(await userOwnsShoppingListItem(session.user.id, itemId))) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ error: "Não encontrado" }, { status: 404 });
   }
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+    return NextResponse.json({ error: "Corpo da requisição inválido" }, { status: 400 });
   }
 
   if (parsed.data.checked !== undefined) {
@@ -47,12 +47,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ itemId: string }> }) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
   const { itemId } = await params;
   if (!(await userOwnsShoppingListItem(session.user.id, itemId))) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ error: "Não encontrado" }, { status: 404 });
   }
 
   await removeShoppingListItem(itemId);

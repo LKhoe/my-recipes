@@ -19,7 +19,7 @@ export function ResetPasswordForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!token) {
-      setError("This reset link is missing its token.");
+      setError("Este link de redefinição está sem o token.");
       return;
     }
     setError(null);
@@ -28,7 +28,7 @@ export function ResetPasswordForm() {
     const { error: resetError } = await authClient.resetPassword({ newPassword, token });
 
     if (resetError) {
-      setError(resetError.message ?? "Could not reset password.");
+      setError(resetError.message ?? "Não foi possível redefinir a senha.");
       setLoading(false);
       return;
     }
@@ -39,7 +39,7 @@ export function ResetPasswordForm() {
   if (!token) {
     return (
       <p className="text-sm text-destructive">
-        This reset link is invalid or expired. Request a new one from the login page.
+        Este link de redefinição é inválido ou expirou. Solicite um novo pela página de login.
       </p>
     );
   }
@@ -47,7 +47,7 @@ export function ResetPasswordForm() {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="newPassword">New password</Label>
+        <Label htmlFor="newPassword">Nova senha</Label>
         <Input
           id="newPassword"
           type="password"
@@ -59,7 +59,7 @@ export function ResetPasswordForm() {
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Button type="submit" disabled={loading}>
-        {loading ? "Resetting…" : "Reset password"}
+        {loading ? "Redefinindo…" : "Redefinir senha"}
       </Button>
     </form>
   );

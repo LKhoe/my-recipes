@@ -45,7 +45,7 @@ function StepTimer({ stepIndex, durationMinutes }: { stepIndex: number; duration
         {minutes}:{seconds.toString().padStart(2, "0")}
       </span>
       {done ? (
-        <span className="text-sm font-medium text-primary">Time&apos;s up!</span>
+        <span className="text-sm font-medium text-primary">Tempo esgotado!</span>
       ) : (
         <button
           type="button"
@@ -53,7 +53,7 @@ function StepTimer({ stepIndex, durationMinutes }: { stepIndex: number; duration
           className="flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
         >
           {running ? <Pause className="size-4" /> : <Play className="size-4" />}
-          {running ? "Pause" : "Start timer"}
+          {running ? "Pausar" : "Iniciar timer"}
         </button>
       )}
       <button
@@ -63,7 +63,7 @@ function StepTimer({ stepIndex, durationMinutes }: { stepIndex: number; duration
           setRunning(false);
         }}
         className="ml-auto text-muted-foreground hover:text-foreground"
-        aria-label="Reset timer"
+        aria-label="Reiniciar timer"
       >
         <RotateCcw className="size-4" />
       </button>
@@ -172,7 +172,7 @@ export function CookModeClient({
         onClick={() => setIngredientsOpen((o) => !o)}
         className="flex items-center justify-between border-b border-border px-4 py-3 text-sm font-medium text-foreground"
       >
-        Ingredients{servings ? ` (${servings} servings)` : ""}
+        Ingredientes{servings ? ` (${servings} porções)` : ""}
         {ingredientsOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
       </button>
       {ingredientsOpen && (
@@ -183,16 +183,16 @@ export function CookModeClient({
                 type="button"
                 onClick={() => setServings((s) => Math.max(1, (s ?? 1) - 1))}
                 className="flex size-7 items-center justify-center rounded-full border border-border"
-                aria-label="Fewer servings"
+                aria-label="Menos porções"
               >
                 -
               </button>
-              <span>{servings} servings</span>
+              <span>{servings} porções</span>
               <button
                 type="button"
                 onClick={() => setServings((s) => (s ?? 1) + 1)}
                 className="flex size-7 items-center justify-center rounded-full border border-border"
-                aria-label="More servings"
+                aria-label="Mais porções"
               >
                 +
               </button>
@@ -213,7 +213,7 @@ export function CookModeClient({
 
       <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-10 text-center">
         <p className="text-sm font-medium text-muted-foreground">
-          Step {currentStepIndex + 1} of {steps.length}
+          Etapa {currentStepIndex + 1} de {steps.length}
         </p>
         <p className="mt-4 max-w-2xl font-display text-display-lg leading-snug text-foreground">{step?.text}</p>
 
@@ -236,7 +236,7 @@ export function CookModeClient({
               : "border-border text-muted-foreground",
           )}
         >
-          <Check className="size-4" /> {checkedSteps.has(currentStepIndex) ? "Done" : "Mark done"}
+          <Check className="size-4" /> {checkedSteps.has(currentStepIndex) ? "Feito" : "Marcar como feito"}
         </button>
       </main>
 
@@ -247,14 +247,14 @@ export function CookModeClient({
           disabled={currentStepIndex === 0}
           className="flex flex-1 items-center justify-center gap-1 rounded-xl border border-border py-4 text-base font-medium text-foreground disabled:opacity-40"
         >
-          <ChevronLeft className="size-5" /> Back
+          <ChevronLeft className="size-5" /> Voltar
         </button>
         {isLastStep ? (
           <Link
             href={`/recipes/${recipeId}`}
             className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-primary py-4 text-base font-medium text-primary-foreground"
           >
-            Finish
+            Concluir
           </Link>
         ) : (
           <button
@@ -262,7 +262,7 @@ export function CookModeClient({
             onClick={goNext}
             className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-primary py-4 text-base font-medium text-primary-foreground"
           >
-            Next <ChevronRight className="size-5" />
+            Próxima <ChevronRight className="size-5" />
           </button>
         )}
       </footer>

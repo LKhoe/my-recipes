@@ -53,13 +53,13 @@ function buildSystemPrompt(context: ExtractionContext, allowEstimation: boolean)
 
 Rules:
 - If there is no recipe in the text, set "recipeFound": false and leave the rest empty/null.
-- Split every ingredient line into "ingredientName" (bare noun, e.g. "tomato"), "quantity" (a plain decimal number, or null if not stated), "unit" (metric or common cooking unit like g, ml, cup, tbsp, tsp, clove, pinch — or null), and "note" (prep detail like "chopped", "melted", "to taste" — or null).
+- Split every ingredient line into "ingredientName" (bare noun), "quantity" (a plain decimal number, or null if not stated), "unit" (metric or a common Brazilian Portuguese cooking-unit token: g, kg, ml, l, xíc, csp, cch, dente, pitada, fatia, lata, unidade — or null), and "note" (prep detail like "picado", "derretida", "a gosto" — or null). Normalize the unit to one of those tokens even if the source spells it out differently (e.g. "colher de sopa" -> "csp", "xícara" -> "xíc").
 - prepTime/cookTime are total minutes as a number, only if explicitly stated; otherwise null.
 - "durationMinutes" on a step is a number only when that step states a specific duration (e.g. "bake for 25 minutes" -> 25); otherwise null.
 - "servings" is a plain integer if stated (e.g. "serves 4-6" -> 4); otherwise null.
 ${
   allowEstimation
-    ? '- If a quantity is vague ("a pinch of salt", "a good glug of oil", "a handful of parsley"), give your best numeric estimate with a sensible unit and set "inferred": true. If truly unquantifiable, leave quantity/unit null and "inferred": false.'
+    ? '- If a quantity is vague ("uma pitada de sal", "um fio de azeite", "um punhado de salsinha"), give your best numeric estimate with a sensible unit and set "inferred": true. If truly unquantifiable, leave quantity/unit null and "inferred": false.'
     : '- Only set "quantity" when a number is explicitly stated in the text. Never estimate. "inferred" is always false.'
 }`;
 }
@@ -91,7 +91,7 @@ export async function extractRecipeWithLLM(
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "X-Title": "My Recipes",
+      "X-Title": "Minhas Receitas",
     },
     body: JSON.stringify({
       model,

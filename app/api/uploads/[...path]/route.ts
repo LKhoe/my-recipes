@@ -14,19 +14,19 @@ const CONTENT_TYPES: Record<string, string> = {
 export async function GET(_request: Request, { params }: { params: Promise<{ path: string[] }> }) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
   const { path: segments } = await params;
   const absolutePath = resolveUploadPath(segments);
   if (!absolutePath) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ error: "Não encontrado" }, { status: 404 });
   }
 
   const ext = absolutePath.slice(absolutePath.lastIndexOf("."));
   const contentType = CONTENT_TYPES[ext];
   if (!contentType) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ error: "Não encontrado" }, { status: 404 });
   }
 
   try {
@@ -38,6 +38,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pat
       },
     });
   } catch {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ error: "Não encontrado" }, { status: 404 });
   }
 }

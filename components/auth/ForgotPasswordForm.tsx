@@ -25,7 +25,7 @@ export function ForgotPasswordForm() {
   if (sent) {
     return (
       <p className="text-sm text-muted-foreground">
-        If an account exists for {email}, a reset link has been sent.
+        Se existir uma conta para {email}, um link de redefinição foi enviado.
       </p>
     );
   }
@@ -33,7 +33,7 @@ export function ForgotPasswordForm() {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="email">E-mail</Label>
         <Input
           id="email"
           type="email"
@@ -43,7 +43,7 @@ export function ForgotPasswordForm() {
         />
       </div>
       <Button type="submit" disabled={loading}>
-        {loading ? "Sending…" : "Send reset link"}
+        {loading ? "Enviando…" : "Enviar link de redefinição"}
       </Button>
     </form>
   );

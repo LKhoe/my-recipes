@@ -17,7 +17,7 @@ export function TagsInput({ value, onChange }: { value: string[]; onChange: (nex
 
   return (
     <div className="flex flex-col gap-2">
-      <Label htmlFor="tags-input">Tags</Label>
+      <Label htmlFor="tags-input">Etiquetas</Label>
       <div className="flex flex-wrap items-center gap-2 rounded-md border border-input px-2 py-1.5">
         {value.map((t) => (
           <Badge key={t} variant="secondary" className="gap-1">
@@ -30,7 +30,7 @@ export function TagsInput({ value, onChange }: { value: string[]; onChange: (nex
         <Input
           id="tags-input"
           className="h-7 flex-1 border-none shadow-none focus-visible:ring-0"
-          placeholder="Add a tag and press Enter"
+          placeholder="Adicione uma tag e pressione Enter"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {

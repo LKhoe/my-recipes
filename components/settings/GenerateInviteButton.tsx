@@ -18,14 +18,14 @@ export function GenerateInviteButton() {
       const body = await res.json();
       setCode(body.code);
     } else {
-      toast.error("Could not generate an invite code");
+      toast.error("Não foi possível gerar um código de convite");
     }
   }
 
   return (
     <div className="flex flex-col gap-2">
       <Button type="button" onClick={handleGenerate} disabled={loading} className="self-start">
-        {loading ? "Generating…" : "Generate invite code"}
+        {loading ? "Gerando…" : "Gerar código de convite"}
       </Button>
       {code && (
         <div className="flex items-center gap-2">
@@ -36,9 +36,9 @@ export function GenerateInviteButton() {
             size="icon-sm"
             onClick={() => {
               navigator.clipboard.writeText(code);
-              toast.success("Copied");
+              toast.success("Copiado");
             }}
-            aria-label="Copy invite code"
+            aria-label="Copiar código de convite"
           >
             <Copy className="size-4" />
           </Button>

@@ -30,7 +30,8 @@ describe("extractRecipeFromJsonLd", () => {
 
     const oil = draft!.ingredients.find((i) => i.ingredientName === "olive oil");
     expect(oil?.quantity).toBe(2);
-    expect(oil?.unit).toBe("tbsp");
+    // English "tbsp" normalizes to the canonical pt-BR token (see ingredient-parser.ts).
+    expect(oil?.unit).toBe("csp");
   });
 
   it("parses an @graph-wrapped Recipe with nested HowToSections and no recipeYield", () => {

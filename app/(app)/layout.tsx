@@ -11,20 +11,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <header className="flex items-center justify-between border-b border-border px-6 py-4">
         <div className="flex items-center gap-6">
           <Link href="/recipes" className="font-display text-display-sm text-foreground">
-            My Recipes
+            Minhas Receitas
           </Link>
           <nav className="hidden items-center gap-4 text-sm text-muted-foreground sm:flex">
             <Link href="/recipes" className="hover:text-foreground">
-              Recipes
+              Receitas
             </Link>
             <Link href="/plan" className="hover:text-foreground">
-              Plan
+              Planejamento
             </Link>
             <Link href="/shopping-list" className="hover:text-foreground">
-              Shopping List
+              Lista de Compras
             </Link>
             <Link href="/settings" className="hover:text-foreground">
-              Settings
+              Configurações
             </Link>
           </nav>
         </div>

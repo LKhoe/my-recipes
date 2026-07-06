@@ -30,7 +30,7 @@ export function StepsEditor({
 
   return (
     <div className="flex flex-col gap-3">
-      <Label>Steps</Label>
+      <Label>Modo de preparo</Label>
       <div className="flex flex-col gap-2">
         {value.map((row, index) => (
           <div key={index} className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-2">
@@ -39,7 +39,7 @@ export function StepsEditor({
             </span>
             <Textarea
               className="min-h-16 flex-1"
-              placeholder="What to do in this step"
+              placeholder="O que fazer nesta etapa"
               required
               value={row.text}
               onChange={(e) => updateRow(index, { text: e.target.value })}
@@ -48,7 +48,7 @@ export function StepsEditor({
               <Input
                 type="number"
                 min={0}
-                placeholder="Minutes"
+                placeholder="Minutos"
                 value={row.durationMinutes ?? ""}
                 onChange={(e) =>
                   updateRow(index, {
@@ -64,7 +64,7 @@ export function StepsEditor({
         ))}
       </div>
       <Button type="button" variant="outline" size="sm" className="self-start" onClick={addRow}>
-        <Plus className="size-4" /> Add step
+        <Plus className="size-4" /> Adicionar etapa
       </Button>
     </div>
   );

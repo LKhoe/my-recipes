@@ -3,67 +3,97 @@ import { parseIngredientLine } from "./ingredient-parser";
 
 describe("parseIngredientLine", () => {
   it("parses a mixed-fraction quantity with unit and note", () => {
-    expect(parseIngredientLine("2 1/2 cups flour, sifted")).toEqual({
+    expect(parseIngredientLine("2 1/2 xíc farinha, peneirada")).toEqual({
       quantity: 2.5,
-      unit: "cup",
-      name: "flour",
-      note: "sifted",
+      unit: "xíc",
+      name: "farinha",
+      note: "peneirada",
     });
   });
 
   it("parses a plain decimal with a metric unit", () => {
-    expect(parseIngredientLine("300g butter, melted")).toEqual({
+    expect(parseIngredientLine("300g manteiga, derretida")).toEqual({
       quantity: 300,
       unit: "g",
-      name: "butter",
-      note: "melted",
+      name: "manteiga",
+      note: "derretida",
     });
   });
 
-  it("handles unquantified 'to taste' ingredients (SPEC §4.3)", () => {
-    const result = parseIngredientLine("Salt, to taste");
+  it("parses a multi-word unit phrase (colher de sopa)", () => {
+    expect(parseIngredientLine("2 colheres de sopa azeite")).toEqual({
+      quantity: 2,
+      unit: "csp",
+      name: "azeite",
+      note: null,
+    });
+  });
+
+  it("handles unquantified 'a gosto' ingredients (SPEC §4.3)", () => {
+    const result = parseIngredientLine("Sal, a gosto");
     expect(result.quantity).toBeNull();
     expect(result.unit).toBeNull();
-    expect(result.name).toBe("Salt");
-    expect(result.note).toBe("to taste");
+    expect(result.name).toBe("Sal");
+    expect(result.note).toBe("a gosto");
   });
 
   it("parses a unicode fraction", () => {
-    expect(parseIngredientLine("½ tsp cinnamon")).toEqual({
+    expect(parseIngredientLine("½ cch canela")).toEqual({
       quantity: 0.5,
-      unit: "tsp",
-      name: "cinnamon",
+      unit: "cch",
+      name: "canela",
       note: null,
     });
   });
 
   it("takes the lower bound of a range", () => {
-    const result = parseIngredientLine("2-3 apples, peeled and cored");
+    const result = parseIngredientLine("2-3 maçãs, descascadas e sem caroço");
     expect(result.quantity).toBe(2);
-    expect(result.name).toBe("apples");
-    expect(result.note).toBe("peeled and cored");
+    expect(result.name).toBe("maçãs");
+    expect(result.note).toBe("descascadas e sem caroço");
   });
 
   it("parses a bare count with no unit", () => {
-    expect(parseIngredientLine("3 eggs")).toEqual({
+    expect(parseIngredientLine("3 ovos")).toEqual({
       quantity: 3,
       unit: null,
-      name: "eggs",
+      name: "ovos",
       note: null,
     });
   });
 
   it("extracts a parenthetical as a note", () => {
-    const result = parseIngredientLine("1 can (400g) chopped tomatoes");
+    const result = parseIngredientLine("1 lata (400g) de tomate picado");
     expect(result.quantity).toBe(1);
     expect(result.note).toBe("400g");
   });
 
   it("falls back to treating the whole line as the name when no quantity is found", () => {
-    const result = parseIngredientLine("Fresh basil leaves, for garnish");
+    const result = parseIngredientLine("Salsinha fresca, para decorar");
     expect(result.quantity).toBeNull();
     expect(result.unit).toBeNull();
-    expect(result.name).toBe("Fresh basil leaves");
-    expect(result.note).toBe("for garnish");
+    expect(result.name).toBe("Salsinha fresca");
+    expect(result.note).toBe("para decorar");
+  });
+
+  it("normalizes English unit words to the canonical pt-BR token (JSON-LD import from English-language sites)", () => {
+    expect(parseIngredientLine("2 tbsp olive oil")).toEqual({
+      quantity: 2,
+      unit: "csp",
+      name: "olive oil",
+      note: null,
+    });
+    expect(parseIngredientLine("1 cup flour")).toEqual({
+      quantity: 1,
+      unit: "xíc",
+      name: "flour",
+      note: null,
+    });
+    expect(parseIngredientLine("3 cloves garlic")).toEqual({
+      quantity: 3,
+      unit: "dente",
+      name: "garlic",
+      note: null,
+    });
   });
 });

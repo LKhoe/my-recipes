@@ -26,7 +26,7 @@ export function RecipeCookingControls({
       <div className="flex flex-wrap items-center gap-2">
         <Button asChild>
           <Link href={`/recipes/${recipeId}/cook`}>
-            <ChefHat className="size-4" /> Start cooking
+            <ChefHat className="size-4" /> Começar a cozinhar
           </Link>
         </Button>
         <SendToKitchenButton recipeId={recipeId} servings={servings} isActive={isActiveInKitchen} />

@@ -30,10 +30,10 @@ export default async function PlanPage({
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="font-display text-display-lg text-foreground">Meal Plan</h1>
+        <h1 className="font-display text-display-lg text-foreground">Planejamento de Refeições</h1>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon-sm" asChild>
-            <Link href={`/plan?week=${prevWeek}`} aria-label="Previous week">
+            <Link href={`/plan?week=${prevWeek}`} aria-label="Semana anterior">
               <ChevronLeft className="size-4" />
             </Link>
           </Button>
@@ -41,7 +41,7 @@ export default async function PlanPage({
             {weekDays[0]} – {weekEnd}
           </span>
           <Button variant="outline" size="icon-sm" asChild>
-            <Link href={`/plan?week=${nextWeek}`} aria-label="Next week">
+            <Link href={`/plan?week=${nextWeek}`} aria-label="Próxima semana">
               <ChevronRight className="size-4" />
             </Link>
           </Button>

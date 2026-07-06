@@ -32,7 +32,7 @@ export function RatingStars({ recipeId, initialScore }: { recipeId: string; init
           disabled={saving}
           onMouseEnter={() => setHovered(value)}
           onClick={() => handleClick(value)}
-          aria-label={`Rate ${value} star${value > 1 ? "s" : ""}`}
+          aria-label={`Avaliar com ${value} estrela${value > 1 ? "s" : ""}`}
           className="p-0.5"
         >
           <Star

@@ -15,7 +15,7 @@ async function redeemInviteIntent(code: string): Promise<string | null> {
   });
   if (res.ok) return null;
   const body = await res.json().catch(() => null);
-  return body?.error ?? "Invalid or already-used invite code.";
+  return body?.error ?? "Código de convite inválido ou já utilizado.";
 }
 
 export function SignupForm() {
@@ -46,7 +46,7 @@ export function SignupForm() {
     });
 
     if (signUpError) {
-      setError(signUpError.message ?? "Could not create account.");
+      setError(signUpError.message ?? "Não foi possível criar a conta.");
       setLoading(null);
       return;
     }
@@ -73,21 +73,21 @@ export function SignupForm() {
     <div className="flex flex-col gap-5">
       <form onSubmit={handleEmailSignup} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="inviteCode">Invite code</Label>
+          <Label htmlFor="inviteCode">Código de convite</Label>
           <Input
             id="inviteCode"
             required
             value={inviteCode}
             onChange={(e) => setInviteCode(e.target.value.trim())}
-            placeholder="From whoever invited you"
+            placeholder="De quem te convidou"
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="name">Name</Label>
+          <Label htmlFor="name">Nome</Label>
           <Input id="name" required value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">E-mail</Label>
           <Input
             id="email"
             type="email"
@@ -97,7 +97,7 @@ export function SignupForm() {
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="password">Password</Label>
+          <Label htmlFor="password">Senha</Label>
           <Input
             id="password"
             type="password"
@@ -109,13 +109,13 @@ export function SignupForm() {
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <Button type="submit" disabled={loading !== null} className="mt-1">
-          {loading === "email" ? "Creating account…" : "Create account"}
+          {loading === "email" ? "Criando conta…" : "Criar conta"}
         </Button>
       </form>
 
       <div className="flex items-center gap-3 text-xs text-muted-foreground">
         <div className="h-px flex-1 bg-border" />
-        or
+        ou
         <div className="h-px flex-1 bg-border" />
       </div>
 
@@ -125,13 +125,13 @@ export function SignupForm() {
         disabled={loading !== null}
         onClick={handleGoogleSignup}
       >
-        {loading === "google" ? "Redirecting…" : "Continue with Google"}
+        {loading === "google" ? "Redirecionando…" : "Continuar com Google"}
       </Button>
 
       <p className="text-center text-sm text-muted-foreground">
-        Already have an account?{" "}
+        Já tem uma conta?{" "}
         <a href="/login" className="font-medium text-primary hover:underline">
-          Log in
+          Entrar
         </a>
       </p>
     </div>

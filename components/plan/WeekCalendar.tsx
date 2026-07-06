@@ -9,12 +9,12 @@ import { RecipePickerPopover } from "@/components/plan/RecipePickerPopover";
 import type { MealPlanEntryView, MealSlot } from "@/lib/services/meal-plan";
 
 const SLOTS: { key: MealSlot; label: string }[] = [
-  { key: "breakfast", label: "Breakfast" },
-  { key: "lunch", label: "Lunch" },
-  { key: "dinner", label: "Dinner" },
+  { key: "breakfast", label: "Café da Manhã" },
+  { key: "lunch", label: "Almoço" },
+  { key: "dinner", label: "Jantar" },
 ];
 
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAY_LABELS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
 export function WeekCalendar({
   days,
@@ -40,7 +40,7 @@ export function WeekCalendar({
       body: JSON.stringify({ date, slot, recipeId }),
     });
     if (res.ok) router.refresh();
-    else toast.error("Could not assign recipe");
+    else toast.error("Não foi possível atribuir a receita");
   }
 
   async function moveEntry(entryId: string, date: string, slot: MealSlot) {
@@ -50,13 +50,13 @@ export function WeekCalendar({
       body: JSON.stringify({ date, slot }),
     });
     if (res.ok) router.refresh();
-    else toast.error("Could not move recipe");
+    else toast.error("Não foi possível mover a receita");
   }
 
   async function removeEntry(entryId: string) {
     const res = await fetch(`/api/meal-plan/${entryId}`, { method: "DELETE" });
     if (res.ok) router.refresh();
-    else toast.error("Could not remove recipe");
+    else toast.error("Não foi possível remover a receita");
   }
 
   return (
@@ -123,7 +123,7 @@ export function WeekCalendar({
                         type="button"
                         onClick={() => removeEntry(entry.id)}
                         className="shrink-0 opacity-0 group-hover:opacity-100"
-                        aria-label="Remove"
+                        aria-label="Remover"
                       >
                         <X className="size-3" />
                       </button>
@@ -134,7 +134,7 @@ export function WeekCalendar({
                       type="button"
                       className="mt-auto flex items-center justify-center gap-1 rounded-md border border-dashed border-border py-1 text-xs text-muted-foreground hover:bg-muted"
                     >
-                      <Plus className="size-3" /> Add
+                      <Plus className="size-3" /> Adicionar
                     </button>
                   </RecipePickerPopover>
                 </div>

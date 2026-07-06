@@ -44,8 +44,8 @@ export function NewRecipeClient({ categories }: { categories: { id: string; name
   return (
     <Tabs defaultValue="import">
       <TabsList>
-        <TabsTrigger value="import">Import from URL</TabsTrigger>
-        <TabsTrigger value="manual">Manual entry</TabsTrigger>
+        <TabsTrigger value="import">Importar de um link</TabsTrigger>
+        <TabsTrigger value="manual">Entrada manual</TabsTrigger>
       </TabsList>
 
       <TabsContent value="import" className="pt-4">

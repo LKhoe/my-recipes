@@ -15,8 +15,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "My Recipes",
-  description: "A private recipe collection for the family.",
+  title: "Minhas Receitas",
+  description: "Uma coleção de receitas privada para a família.",
 };
 
 export default function RootLayout({
@@ -25,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="pt-BR" suppressHydrationWarning>
       <body className={`${fraunces.variable} ${inter.variable} antialiased`}>
         {children}
         <Toaster />

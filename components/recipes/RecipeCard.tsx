@@ -36,7 +36,7 @@ export function RecipeCard({ recipe }: { recipe: RecipeListItem }) {
             </span>
           ))}
           {recipe.authorName && (
-            <span className="ml-auto text-xs text-muted-foreground">by {recipe.authorName}</span>
+            <span className="ml-auto text-xs text-muted-foreground">por {recipe.authorName}</span>
           )}
         </div>
       </div>

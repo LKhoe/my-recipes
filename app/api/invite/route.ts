@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   const { code } = await request.json().catch(() => ({ code: undefined }));
 
   if (typeof code !== "string" || !(await isInviteCodeRedeemable(code))) {
-    return NextResponse.json({ error: "Invalid or already-used invite code." }, { status: 400 });
+    return NextResponse.json({ error: "Código de convite inválido ou já utilizado." }, { status: 400 });
   }
 
   const cookieStore = await cookies();

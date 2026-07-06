@@ -25,7 +25,7 @@ export function LoginForm() {
     const { error: signInError } = await authClient.signIn.email({ email, password });
 
     if (signInError) {
-      setError(signInError.message ?? "Could not log in.");
+      setError(signInError.message ?? "Não foi possível entrar.");
       setLoading(null);
       return;
     }
@@ -43,7 +43,7 @@ export function LoginForm() {
     <div className="flex flex-col gap-5">
       <form onSubmit={handleLogin} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="email">Email</Label>
+          <Label htmlFor="email">E-mail</Label>
           <Input
             id="email"
             type="email"
@@ -54,9 +54,9 @@ export function LoginForm() {
         </div>
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">Senha</Label>
             <a href="/forgot-password" className="text-xs text-muted-foreground hover:underline">
-              Forgot password?
+              Esqueceu a senha?
             </a>
           </div>
           <Input
@@ -69,13 +69,13 @@ export function LoginForm() {
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <Button type="submit" disabled={loading !== null} className="mt-1">
-          {loading === "email" ? "Logging in…" : "Log in"}
+          {loading === "email" ? "Entrando…" : "Entrar"}
         </Button>
       </form>
 
       <div className="flex items-center gap-3 text-xs text-muted-foreground">
         <div className="h-px flex-1 bg-border" />
-        or
+        ou
         <div className="h-px flex-1 bg-border" />
       </div>
 
@@ -85,13 +85,13 @@ export function LoginForm() {
         disabled={loading !== null}
         onClick={handleGoogleLogin}
       >
-        {loading === "google" ? "Redirecting…" : "Continue with Google"}
+        {loading === "google" ? "Redirecionando…" : "Continuar com Google"}
       </Button>
 
       <p className="text-center text-sm text-muted-foreground">
-        New here?{" "}
+        Novo por aqui?{" "}
         <a href="/signup" className="font-medium text-primary hover:underline">
-          You&apos;ll need an invite code
+          Você vai precisar de um código de convite
         </a>
       </p>
     </div>

@@ -18,7 +18,7 @@ export function CategoryPicker({
 
   return (
     <div className="flex flex-col gap-2">
-      <Label>Categories</Label>
+      <Label>Categorias</Label>
       <div className="flex flex-wrap gap-2">
         {categories.map((c) => {
           const active = value.includes(c.id);

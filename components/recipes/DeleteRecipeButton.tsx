@@ -25,12 +25,12 @@ export function DeleteRecipeButton({ recipeId }: { recipeId: string }) {
   if (confirming) {
     return (
       <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">Delete this recipe?</span>
+        <span className="text-sm text-muted-foreground">Excluir esta receita?</span>
         <Button variant="destructive" size="sm" disabled={loading} onClick={handleDelete}>
-          {loading ? "Deleting…" : "Confirm"}
+          {loading ? "Excluindo…" : "Confirmar"}
         </Button>
         <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
-          Cancel
+          Cancelar
         </Button>
       </div>
     );
@@ -38,7 +38,7 @@ export function DeleteRecipeButton({ recipeId }: { recipeId: string }) {
 
   return (
     <Button variant="ghost" size="sm" onClick={() => setConfirming(true)}>
-      <Trash2 className="size-4" /> Delete
+      <Trash2 className="size-4" /> Excluir
     </Button>
   );
 }

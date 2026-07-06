@@ -8,10 +8,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { X, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatScaledQuantity } from "@/lib/scale";
 import type { ShoppingListItemView } from "@/lib/services/shopping-list";
 
 function formatLine(item: ShoppingListItemView): string {
-  return [item.quantity, item.unit].filter(Boolean).join(" ");
+  return [formatScaledQuantity(item.quantity, item.unit), item.unit].filter(Boolean).join(" ");
 }
 
 export function ShoppingListClient({ items }: { items: ShoppingListItemView[] }) {
@@ -29,7 +30,7 @@ export function ShoppingListClient({ items }: { items: ShoppingListItemView[] })
     });
     if (!res.ok) {
       setLocalItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, checked: item.checked } : i)));
-      toast.error("Could not update item");
+      toast.error("Não foi possível atualizar o item");
     }
   }
 
@@ -37,7 +38,7 @@ export function ShoppingListClient({ items }: { items: ShoppingListItemView[] })
     setLocalItems((prev) => prev.filter((i) => i.id !== itemId));
     const res = await fetch(`/api/shopping-list/items/${itemId}`, { method: "DELETE" });
     if (!res.ok) {
-      toast.error("Could not remove item");
+      toast.error("Não foi possível remover o item");
       router.refresh();
     }
   }
@@ -57,7 +58,7 @@ export function ShoppingListClient({ items }: { items: ShoppingListItemView[] })
       setLocalItems((prev) => [...prev, { id: created.id, ingredientId: null, name: newName.trim(), quantity: null, unit: null, checked: false, order: prev.length }]);
       setNewName("");
     } else {
-      toast.error("Could not add item");
+      toast.error("Não foi possível adicionar o item");
     }
   }
 
@@ -74,18 +75,18 @@ export function ShoppingListClient({ items }: { items: ShoppingListItemView[] })
     <div className="flex flex-col gap-6">
       <form onSubmit={addItem} className="flex gap-2">
         <Input
-          placeholder="Add an item…"
+          placeholder="Adicionar um item…"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           disabled={adding}
         />
         <Button type="submit" disabled={adding}>
-          <Plus className="size-4" /> Add
+          <Plus className="size-4" /> Adicionar
         </Button>
       </form>
 
       {sortedGroups.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No items yet.</p>
+        <p className="text-sm text-muted-foreground">Ainda não há itens.</p>
       ) : (
         <ul className="flex flex-col gap-4">
           {sortedGroups.map((group) => (
@@ -109,7 +110,7 @@ export function ShoppingListClient({ items }: { items: ShoppingListItemView[] })
                       type="button"
                       onClick={() => removeItem(item.id)}
                       className="opacity-0 text-muted-foreground group-hover:opacity-100 hover:text-destructive"
-                      aria-label="Remove item"
+                      aria-label="Remover item"
                     >
                       <X className="size-4" />
                     </button>

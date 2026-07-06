@@ -54,7 +54,7 @@ export const auth = betterAuth({
 
           if (!code || !(await isInviteCodeRedeemable(code))) {
             throw new APIError("BAD_REQUEST", {
-              message: "A valid invite code is required to create an account.",
+              message: "É necessário um código de convite válido para criar uma conta.",
               code: "INVALID_INVITE_CODE",
             });
           }

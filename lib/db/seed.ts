@@ -1,20 +1,20 @@
 import { db } from "@/lib/db";
 import { category } from "@/lib/db/schema";
 
-// Fixed category set (SPEC §4.2). Idempotent — safe to run on every deploy.
+// Fixed category set (SPEC §4.2), in Brazilian Portuguese. Idempotent — safe to run on every deploy.
 const CATEGORIES = [
-  "Breakfast",
+  "Café da Manhã",
   "Brunch",
-  "Appetizer",
-  "Main",
-  "Side",
-  "Salad",
-  "Soup",
-  "Dessert",
-  "Snack",
-  "Bread",
-  "Sauce & Condiment",
-  "Beverage",
+  "Entrada",
+  "Prato Principal",
+  "Acompanhamento",
+  "Salada",
+  "Sopa",
+  "Sobremesa",
+  "Lanche",
+  "Pão",
+  "Molhos e Condimentos",
+  "Bebida",
 ];
 
 async function seed() {

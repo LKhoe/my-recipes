@@ -84,7 +84,7 @@ export function RecipeForm({
     const steps = values.steps.filter((s) => s.text.trim().length > 0);
 
     if (!values.title.trim()) {
-      setError("Title is required.");
+      setError("O título é obrigatório.");
       return;
     }
 
@@ -113,7 +113,7 @@ export function RecipeForm({
         });
         if (!res.ok) {
           const body = await res.json().catch(() => null);
-          throw new Error(body?.error ?? "Could not save recipe.");
+          throw new Error(body?.error ?? "Não foi possível salvar a receita.");
         }
         const created = await res.json();
         if (pendingFiles.length > 0) await uploadPendingFiles(created.id, pendingFiles);
@@ -134,7 +134,7 @@ export function RecipeForm({
         });
         if (!res.ok) {
           const body = await res.json().catch(() => null);
-          throw new Error(body?.error ?? "Could not save recipe.");
+          throw new Error(body?.error ?? "Não foi possível salvar a receita.");
         }
         router.push(`/recipes/${recipeId}`);
         router.refresh();
@@ -149,21 +149,21 @@ export function RecipeForm({
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
       {(values.sourceUrl || values.videoUrl) && (
         <div className="rounded-lg border border-accent bg-accent/40 px-3 py-2 text-sm text-accent-foreground">
-          Imported from{" "}
+          Importado de{" "}
           <a href={values.sourceUrl ?? values.videoUrl ?? "#"} target="_blank" rel="noreferrer" className="underline">
             {values.sourceUrl ?? values.videoUrl}
           </a>
-          . Review the draft below before saving.
+          . Revise o rascunho abaixo antes de salvar.
         </div>
       )}
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="title">Title</Label>
+        <Label htmlFor="title">Título</Label>
         <Input id="title" required value={values.title} onChange={(e) => set("title", e.target.value)} />
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="description">Description</Label>
+        <Label htmlFor="description">Descrição</Label>
         <Textarea
           id="description"
           value={values.description}
@@ -173,7 +173,7 @@ export function RecipeForm({
 
       <div className="grid grid-cols-3 gap-3">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="servings">Servings</Label>
+          <Label htmlFor="servings">Porções</Label>
           <Input
             id="servings"
             type="number"
@@ -183,7 +183,7 @@ export function RecipeForm({
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="prepTime">Prep (min)</Label>
+          <Label htmlFor="prepTime">Preparo (min)</Label>
           <Input
             id="prepTime"
             type="number"
@@ -193,7 +193,7 @@ export function RecipeForm({
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="cookTime">Cook (min)</Label>
+          <Label htmlFor="cookTime">Cozimento (min)</Label>
           <Input
             id="cookTime"
             type="number"
@@ -220,7 +220,7 @@ export function RecipeForm({
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <Button type="submit" disabled={submitting} className="self-start">
-        {submitting ? "Saving…" : mode === "create" ? "Save recipe" : "Save changes"}
+        {submitting ? "Salvando…" : mode === "create" ? "Salvar receita" : "Salvar alterações"}
       </Button>
     </form>
   );

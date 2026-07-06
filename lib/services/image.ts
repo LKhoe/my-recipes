@@ -22,10 +22,10 @@ export async function processAndStoreImage(
   mimeType: string,
 ): Promise<{ path: string }> {
   if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
-    throw new ImageValidationError(`Unsupported image type: ${mimeType}`);
+    throw new ImageValidationError(`Tipo de imagem não suportado: ${mimeType}`);
   }
   if (buffer.byteLength > MAX_UPLOAD_BYTES) {
-    throw new ImageValidationError("Image exceeds the 10 MB upload limit.");
+    throw new ImageValidationError("A imagem excede o limite de 10 MB por envio.");
   }
 
   const relativePath = path.posix.join("recipes", recipeId, `${randomUUID()}.webp`);

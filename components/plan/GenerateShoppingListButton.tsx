@@ -12,7 +12,7 @@ export function GenerateShoppingListButton({ recipeIds }: { recipeIds: string[] 
 
   async function handleClick() {
     if (recipeIds.length === 0) {
-      toast.error("Assign a recipe to this week first.");
+      toast.error("Atribua uma receita a esta semana primeiro.");
       return;
     }
     setLoading(true);
@@ -26,13 +26,13 @@ export function GenerateShoppingListButton({ recipeIds }: { recipeIds: string[] 
     if (res.ok) {
       router.push("/shopping-list");
     } else {
-      toast.error("Could not generate shopping list");
+      toast.error("Não foi possível gerar a lista de compras");
     }
   }
 
   return (
     <Button size="sm" disabled={loading} onClick={handleClick}>
-      <ShoppingCart className="size-4" /> {loading ? "Generating…" : "Shopping list"}
+      <ShoppingCart className="size-4" /> {loading ? "Gerando…" : "Lista de compras"}
     </Button>
   );
 }

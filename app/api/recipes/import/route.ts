@@ -15,20 +15,20 @@ const bodySchema = z.object({ url: z.string().url() });
 export async function POST(request: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
   const rateLimit = checkImportRateLimit(session.user.id);
   if (!rateLimit.allowed) {
     return NextResponse.json(
-      { error: "Too many imports. Please try again later." },
+      { error: "Muitas importações. Tente novamente mais tarde." },
       { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } },
     );
   }
 
   const parsedBody = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsedBody.success) {
-    return NextResponse.json({ error: "A valid URL is required." }, { status: 400 });
+    return NextResponse.json({ error: "Uma URL válida é obrigatória." }, { status: 400 });
   }
 
   try {
@@ -39,9 +39,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: err.message }, { status: 422 });
     }
     if (err instanceof LLMExtractionError) {
-      return NextResponse.json({ error: `Could not extract a recipe: ${err.message}` }, { status: 502 });
+      return NextResponse.json({ error: `Não foi possível extrair uma receita: ${err.message}` }, { status: 502 });
     }
     console.error("Recipe import failed:", err);
-    return NextResponse.json({ error: "Import failed unexpectedly." }, { status: 500 });
+    return NextResponse.json({ error: "A importação falhou inesperadamente." }, { status: 500 });
   }
 }

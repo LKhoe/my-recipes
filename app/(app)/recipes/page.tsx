@@ -27,10 +27,10 @@ export default async function RecipesPage({
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-display-lg text-foreground">Recipes</h1>
+        <h1 className="font-display text-display-lg text-foreground">Receitas</h1>
         <Button asChild>
           <Link href="/recipes/new">
-            <Plus className="size-4" /> Add recipe
+            <Plus className="size-4" /> Adicionar receita
           </Link>
         </Button>
       </div>
@@ -38,28 +38,28 @@ export default async function RecipesPage({
       <form method="get" className="mt-6 flex flex-wrap items-center gap-2">
         <div className="relative min-w-48 flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input name="q" defaultValue={params.q ?? ""} placeholder="Search title, description, ingredient…" className="pl-8" />
+          <Input name="q" defaultValue={params.q ?? ""} placeholder="Buscar título, descrição, ingrediente…" className="pl-8" />
         </div>
         <select
           name="categoryId"
           defaultValue={params.categoryId ?? ""}
           className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
-          <option value="">All categories</option>
+          <option value="">Todas as categorias</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
           ))}
         </select>
-        <Input name="tag" defaultValue={params.tag ?? ""} placeholder="Tag" className="w-28" />
-        <Input name="ingredient" defaultValue={params.ingredient ?? ""} placeholder="Ingredient" className="w-32" />
+        <Input name="tag" defaultValue={params.tag ?? ""} placeholder="Etiqueta" className="w-28" />
+        <Input name="ingredient" defaultValue={params.ingredient ?? ""} placeholder="Ingrediente" className="w-32" />
         <Button type="submit" variant="secondary">
-          Search
+          Buscar
         </Button>
         {hasFilters && (
           <Button asChild variant="ghost">
-            <Link href="/recipes">Clear</Link>
+            <Link href="/recipes">Limpar</Link>
           </Button>
         )}
       </form>
@@ -68,16 +68,16 @@ export default async function RecipesPage({
         <div className="mt-16 flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border py-20 text-center">
           <ChefHat className="size-10 text-muted-foreground" />
           <p className="font-display text-display-sm text-foreground">
-            {hasFilters ? "No recipes match those filters" : "The recipe box is empty"}
+            {hasFilters ? "Nenhuma receita corresponde aos filtros" : "A caixa de receitas está vazia"}
           </p>
           <p className="max-w-sm text-sm text-muted-foreground">
             {hasFilters
-              ? "Try a broader search, or clear the filters."
-              : "Import one from a URL or YouTube video, or add your own by hand."}
+              ? "Tente uma busca mais ampla, ou limpe os filtros."
+              : "Importe uma de um link ou vídeo do YouTube, ou adicione a sua manualmente."}
           </p>
           {!hasFilters && (
             <Button asChild className="mt-2">
-              <Link href="/recipes/new">Add your first recipe</Link>
+              <Link href="/recipes/new">Adicionar sua primeira receita</Link>
             </Button>
           )}
         </div>

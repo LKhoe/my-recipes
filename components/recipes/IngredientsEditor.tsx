@@ -29,13 +29,13 @@ export function IngredientsEditor({
 
   return (
     <div className="flex flex-col gap-3">
-      <Label>Ingredients</Label>
+      <Label>Ingredientes</Label>
       <div className="flex flex-col gap-2">
         {value.map((row, index) => (
           <div key={index} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 p-2">
             <Input
               className="w-20"
-              placeholder="Qty"
+              placeholder="Qtd"
               inputMode="decimal"
               value={row.quantity ?? ""}
               onChange={(e) => {
@@ -45,29 +45,29 @@ export function IngredientsEditor({
             />
             <Input
               className="w-24"
-              placeholder="Unit"
+              placeholder="Unidade"
               value={row.unit ?? ""}
               onChange={(e) => updateRow(index, { unit: e.target.value || null })}
             />
             <Input
               className="min-w-40 flex-1"
-              placeholder="Ingredient"
+              placeholder="Ingrediente"
               required
               value={row.ingredientName}
               onChange={(e) => updateRow(index, { ingredientName: e.target.value })}
             />
             <Input
               className="min-w-32 flex-1"
-              placeholder="Note (optional)"
+              placeholder="Observação (opcional)"
               value={row.note ?? ""}
               onChange={(e) => updateRow(index, { note: e.target.value || null })}
             />
             {row.inferred && (
               <span
-                title="Quantity estimated during import — verify before saving"
+                title="Quantidade estimada durante a importação — confira antes de salvar"
                 className="flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground"
               >
-                <Sparkles className="size-3" /> estimated
+                <Sparkles className="size-3" /> estimado
               </span>
             )}
             <Button type="button" variant="ghost" size="icon-sm" onClick={() => removeRow(index)}>
@@ -77,7 +77,7 @@ export function IngredientsEditor({
         ))}
       </div>
       <Button type="button" variant="outline" size="sm" className="self-start" onClick={addRow}>
-        <Plus className="size-4" /> Add ingredient
+        <Plus className="size-4" /> Adicionar ingrediente
       </Button>
     </div>
   );

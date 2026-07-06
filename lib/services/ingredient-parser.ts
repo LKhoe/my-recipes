@@ -1,8 +1,13 @@
-// Deterministic parser for a raw ingredient line ("2 1/2 cups flour, sifted") into
+// Deterministic parser for a raw ingredient line ("2 1/2 xíc farinha, peneirada") into
 // { quantity, unit, name, note }. Used by the JSON-LD import path (SPEC §4.6 step 1), which is
 // explicitly a no-LLM, free, instant path — so this has to do the quantity/unit/name/note split
 // (SPEC §4.5a) with regex/heuristics rather than a model call. It's inherently imperfect on
 // unusual phrasing; the LLM paths (4.6 step 2, 4.6b) do their own splitting per-recipe instead.
+// UI display is Brazilian Portuguese (see DECISIONS.md "pt-BR translation"), but recipe.recipeIngredient
+// text comes from arbitrary third-party sites via JSON-LD — many of which are English-language —
+// so both English and Portuguese unit words are recognized here and normalized to the same
+// canonical pt-BR token (e.g. "tbsp" and "colher de sopa" both -> "csp") for consistent display
+// and shopping-list merging regardless of the source language.
 
 const UNICODE_FRACTIONS: Record<string, number> = {
   "¼": 1 / 4,
@@ -22,65 +27,125 @@ const UNICODE_FRACTIONS: Record<string, number> = {
   "⅞": 7 / 8,
 };
 
-// Ordered longest-first within each length so e.g. "tablespoons" matches before "tablespoon".
+// Both Portuguese and English unit words map onto the same canonical pt-BR token. Keys can be
+// multi-word phrases ("colher de sopa", "tablespoon of") — see parseLeadingUnit, which tries
+// phrases longest-first rather than a single word token.
 const UNIT_ALIASES: Record<string, string> = {
   g: "g",
+  grama: "g",
+  gramas: "g",
   gram: "g",
   grams: "g",
   kg: "kg",
+  quilo: "kg",
+  quilos: "kg",
+  quilograma: "kg",
+  quilogramas: "kg",
   kilogram: "kg",
   kilograms: "kg",
   mg: "mg",
+  miligrama: "mg",
+  miligramas: "mg",
   milligram: "mg",
   milligrams: "mg",
   ml: "ml",
+  mililitro: "ml",
+  mililitros: "ml",
   milliliter: "ml",
   milliliters: "ml",
   millilitre: "ml",
   millilitres: "ml",
   l: "l",
+  litro: "l",
+  litros: "l",
   liter: "l",
   liters: "l",
   litre: "l",
   litres: "l",
   cl: "cl",
   dl: "dl",
-  cup: "cup",
-  cups: "cup",
-  tbsp: "tbsp",
-  tablespoon: "tbsp",
-  tablespoons: "tbsp",
-  tsp: "tsp",
-  teaspoon: "tsp",
-  teaspoons: "tsp",
+  "xíc": "xíc",
+  xic: "xíc",
+  "xícara": "xíc",
+  xicara: "xíc",
+  "xícaras": "xíc",
+  xicaras: "xíc",
+  cup: "xíc",
+  cups: "xíc",
+  csp: "csp",
+  "colher de sopa": "csp",
+  "colheres de sopa": "csp",
+  tbsp: "csp",
+  tablespoon: "csp",
+  tablespoons: "csp",
+  cch: "cch",
+  "colher de chá": "cch",
+  "colher de cha": "cch",
+  "colheres de chá": "cch",
+  "colheres de cha": "cch",
+  tsp: "cch",
+  teaspoon: "cch",
+  teaspoons: "cch",
   oz: "oz",
+  "onça": "oz",
+  onca: "oz",
+  "onças": "oz",
+  oncas: "oz",
   ounce: "oz",
   ounces: "oz",
   lb: "lb",
+  libra: "lb",
+  libras: "lb",
   lbs: "lb",
   pound: "lb",
   pounds: "lb",
-  pinch: "pinch",
-  pinches: "pinch",
-  dash: "dash",
-  clove: "clove",
-  cloves: "clove",
-  slice: "slice",
-  slices: "slice",
-  can: "can",
-  cans: "can",
-  piece: "piece",
-  pieces: "piece",
-  bunch: "bunch",
-  bunches: "bunch",
-  sprig: "sprig",
-  sprigs: "sprig",
-  stick: "stick",
-  sticks: "stick",
-  package: "package",
-  packages: "package",
-  pkg: "package",
+  pitada: "pitada",
+  pitadas: "pitada",
+  pinch: "pitada",
+  pinches: "pitada",
+  borrifo: "borrifo",
+  borrifos: "borrifo",
+  dash: "borrifo",
+  dashes: "borrifo",
+  dente: "dente",
+  dentes: "dente",
+  clove: "dente",
+  cloves: "dente",
+  fatia: "fatia",
+  fatias: "fatia",
+  slice: "fatia",
+  slices: "fatia",
+  lata: "lata",
+  latas: "lata",
+  can: "lata",
+  cans: "lata",
+  unidade: "unidade",
+  unidades: "unidade",
+  piece: "unidade",
+  pieces: "unidade",
+  "maço": "maço",
+  maco: "maço",
+  "maços": "maço",
+  macos: "maço",
+  bunch: "maço",
+  bunches: "maço",
+  ramo: "ramo",
+  ramos: "ramo",
+  sprig: "ramo",
+  sprigs: "ramo",
+  tablete: "tablete",
+  tabletes: "tablete",
+  stick: "tablete",
+  sticks: "tablete",
+  pacote: "pacote",
+  pacotes: "pacote",
+  package: "pacote",
+  packages: "pacote",
+  pkg: "pacote",
 };
+
+// Longest phrase first, so "colher de sopa" is tried before a bare "colher" would (wrongly) match.
+const UNIT_PHRASES = Object.keys(UNIT_ALIASES).sort((a, b) => b.length - a.length);
 
 export type ParsedIngredientLine = {
   quantity: number | null;
@@ -106,10 +171,10 @@ function parseLeadingNumber(text: string): { value: number; rest: string } | nul
     return { value: num / den, rest: text.slice(simpleFraction[0].length) };
   }
 
-  // A range like "2-3 apples" or "2 to 3 apples" — use the lower bound. Checked before the
-  // plain-decimal case below since that would otherwise match just the "2" and leave a
-  // dangling "-3" stuck to the front of the name.
-  const range = text.match(/^(\d+(?:\.\d+)?)\s*(?:-|to)\s*\d+(?:\.\d+)?\s*/);
+  // A range like "2-3 maçãs", "2 a 3 maçãs", or "2 to 3 apples" — use the lower bound. Checked
+  // before the plain-decimal case below since that would otherwise match just the "2" and leave
+  // a dangling "-3" stuck to the front of the name.
+  const range = text.match(/^(\d+(?:\.\d+)?)\s*(?:-|a|to)\s*\d+(?:\.\d+)?\s*/);
   if (range) {
     return { value: Number(range[1]), rest: text.slice(range[0].length) };
   }
@@ -130,12 +195,23 @@ function parseLeadingNumber(text: string): { value: number; rest: string } | nul
 }
 
 function parseLeadingUnit(text: string): { unit: string; rest: string } | null {
-  const match = text.match(/^([a-zA-Z]+)\.?\s+/);
-  if (!match) return null;
-  const word = match[1].toLowerCase();
-  const canonical = UNIT_ALIASES[word];
-  if (!canonical) return null;
-  return { unit: canonical, rest: text.slice(match[0].length) };
+  const lower = text.toLowerCase();
+
+  for (const phrase of UNIT_PHRASES) {
+    if (!lower.startsWith(phrase)) continue;
+
+    let cursor = phrase.length;
+    if (text[cursor] === ".") cursor += 1;
+
+    // Whole-word/phrase match only — the next character must end the phrase (or the string),
+    // not continue into a longer word (so "l" doesn't match the start of "laranja").
+    const boundaryChar = text[cursor];
+    if (boundaryChar !== undefined && !/\s/.test(boundaryChar)) continue;
+
+    return { unit: UNIT_ALIASES[phrase], rest: text.slice(cursor).trimStart() };
+  }
+
+  return null;
 }
 
 /** Splits a name string on its first comma or trailing/leading parenthetical into name + note. */

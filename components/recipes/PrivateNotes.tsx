@@ -25,15 +25,15 @@ export function PrivateNotes({ recipeId, initialBody }: { recipeId: string; init
   return (
     <div className="flex flex-col gap-2">
       <Textarea
-        placeholder="Only you can see this — e.g. 'used less salt, worked great'"
+        placeholder="Só você vê isso — ex.: 'usei menos sal, ficou ótimo'"
         value={body}
         onChange={(e) => setBody(e.target.value)}
         className="min-h-20"
       />
       <div className="flex items-center gap-3 self-end">
-        {saved && <span className="text-xs text-muted-foreground">Saved</span>}
+        {saved && <span className="text-xs text-muted-foreground">Salvo</span>}
         <Button type="button" size="sm" variant="outline" disabled={saving} onClick={handleSave}>
-          {saving ? "Saving…" : "Save note"}
+          {saving ? "Salvando…" : "Salvar nota"}
         </Button>
       </div>
     </div>

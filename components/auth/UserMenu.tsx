@@ -34,7 +34,7 @@ export function UserMenu({
         <p className="font-medium leading-tight">{name || email}</p>
       </div>
       <Button variant="ghost" size="sm" onClick={handleSignOut}>
-        Log out
+        Sair
       </Button>
     </div>
   );

@@ -45,7 +45,7 @@ export function ImageManager({
           onImagesChange([...images, created]);
         } else {
           const body = await res.json().catch(() => null);
-          setError(body?.error ?? "Image upload failed.");
+          setError(body?.error ?? "Falha ao enviar a imagem.");
         }
       }
       setUploading(false);
@@ -61,13 +61,13 @@ export function ImageManager({
     if (res.ok) {
       onImagesChange(images.filter((img) => img.id !== imageId));
     } else {
-      setError("Could not remove photo.");
+      setError("Não foi possível remover a foto.");
     }
   }
 
   return (
     <div className="flex flex-col gap-2">
-      <Label>Photos</Label>
+      <Label>Fotos</Label>
       <div className="flex flex-wrap gap-3">
         {images.map((img) => (
           <div key={img.id} className="group relative size-24 overflow-hidden rounded-lg border border-border">
@@ -102,7 +102,7 @@ export function ImageManager({
             className="flex size-24 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border text-muted-foreground hover:bg-muted"
           >
             {uploading ? <Loader2 className="size-5 animate-spin" /> : <ImagePlus className="size-5" />}
-            <span className="text-xs">Add</span>
+            <span className="text-xs">Adicionar</span>
           </button>
         )}
       </div>

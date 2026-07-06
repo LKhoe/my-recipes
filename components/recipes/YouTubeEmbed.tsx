@@ -18,7 +18,7 @@ export function YouTubeEmbed({ videoUrl }: { videoUrl: string }) {
       <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black">
         <iframe
           src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
-          title="Recipe video"
+          title="Vídeo da receita"
           allow="accelerate-compute; autoplay; encrypted-media; picture-in-picture"
           allowFullScreen
           className="size-full"
@@ -35,7 +35,7 @@ export function YouTubeEmbed({ videoUrl }: { videoUrl: string }) {
     >
       <Image
         src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
-        alt="Video thumbnail"
+        alt="Miniatura do vídeo"
         fill
         unoptimized
         className="object-cover opacity-90 transition-opacity group-hover:opacity-100"

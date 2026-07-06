@@ -9,7 +9,7 @@ import { generateInviteCode } from "@/lib/invite";
 export async function POST() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
   const code = generateInviteCode();

@@ -12,12 +12,12 @@ const bodySchema = z.object({
 export async function PATCH(request: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: "recipeId and currentStepIndex are required" }, { status: 400 });
+    return NextResponse.json({ error: "recipeId e currentStepIndex são obrigatórios" }, { status: 400 });
   }
 
   const applied = await updateKitchenStep(parsed.data.recipeId, parsed.data.currentStepIndex);
