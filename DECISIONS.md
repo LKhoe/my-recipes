@@ -159,3 +159,53 @@ Choices made where SPEC.md was silent, with rationale. Newest last.
   check — verified this matters: a stale Cook Mode tab left open on a recipe that's no longer the
   active one gets `{applied: false}` and cannot clobber whichever recipe the circle is actually
   cooking now.
+
+## Phase 3
+
+- **Shopping-list merge drops ingredient notes.** SPEC §5's `ShoppingListItem` has no `note`
+  column (unlike `RecipeIngredient`) — prep detail ("chopped", "melted") isn't relevant to buying
+  groceries, so `lib/shopping-list-merge.ts` only carries ingredient/quantity/unit through. Merge
+  key is `(ingredientId, unit)`; a bare count (no unit) is its own bucket, distinct from any real
+  unit — verified against real recipes that "2 eggs" and "100g eggs" correctly stay as two lines,
+  not merged.
+
+- **All-unquantified duplicates ("salt, to taste" in every recipe) collapse to one line with a
+  null quantity**, rather than being dropped or listed once per recipe. If a bucket has *some*
+  quantified items and some unquantified ones, the unquantified ones just don't add to the sum —
+  there's nothing numeric to add. Verified against real data (two recipes both saying "salt, to
+  taste" produced exactly one "salt" line, no quantity).
+
+- **Shopping lists are per-user, not circle-shared** — this follows SPEC §5's schema directly
+  (`ShoppingList.userId`), unlike the circle-shared meal plan. Each "Generate" click always creates
+  a **new** `ShoppingList` row rather than merging into an existing one; the shopping-list page
+  shows the user's most recent list. Older lists aren't deleted (consistent with the soft-delete/
+  recoverable-by-DB philosophy elsewhere) but also aren't browsable in v1 — SPEC doesn't ask for
+  list history, and this avoids a list-picker UI for a feature likely used a few times a week.
+
+- **Meal-plan "drag" vs. "assign" split.** SPEC §4.4 says "drag/assign recipes onto calendar
+  slots." Read this as two distinct interactions for two distinct actions: clicking "+" opens a
+  searchable recipe picker to *add* a recipe to a slot (works on touch, no drag needed); dragging
+  an *already-assigned* chip to a different cell *moves* it (native HTML5 drag-and-drop, no added
+  dependency). Didn't build a separate draggable recipe-list rail for adding-via-drag — one add
+  path (the picker) plus real drag feedback for rearranging covered both spec verbs without a
+  second, redundant UI surface.
+
+- **Backup: `pg_dump`'s stdout is buffered in memory (once), uploaded files stream from disk
+  without buffering.** Tar entries require a known size up front; a live process's stdout doesn't
+  have one without either buffering it or running the dump twice. Each upload file's size comes
+  free from `stat()`, so those genuinely stream via `tar-stream`'s writable entry + a piped
+  `fs.createReadStream` — no buffering there. Acceptable at this app's data scale (a personal
+  recipe collection, not a data warehouse); revisit if dumps ever grow large enough for this to
+  matter.
+
+- **Bug found via real-call testing: `pack.pipe(gzip)` didn't forward `pack`'s `error` event**,
+  so a failed `pg_dump` (first tested this against a local `pg_dump` 14 client against the
+  Postgres 16 server — a genuine version mismatch, not a code bug) crashed the whole dev server
+  with an uncaught exception instead of returning a clean 500. Fixed with an explicit
+  `pack.on("error", err => gzip.destroy(err))` — Node streams don't propagate `error` across
+  `.pipe()` by design. Verified both failure (clean 500, server survives) and success (real
+  restore into a scratch Postgres database, row counts matched) paths.
+
+- **`@types/node` bumped from `^20` to `^24`** to match the `engines.node >= 24` already declared
+  — `^20`'s bundled types didn't recognize some Node 22+/24 stream APIs reached for during this
+  phase.

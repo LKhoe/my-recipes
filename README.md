@@ -16,8 +16,7 @@ npm run dev
 ```
 
 Open http://localhost:3000/signup and use the printed invite code to create the first account.
-Every account after that can be invited by an existing member via `POST /api/invite/generate`
-(authenticated) — a settings-page button for this lands in a later phase.
+Every account after that can be invited by an existing member from **Settings → Invite someone**.
 
 ### Google OAuth
 
@@ -43,6 +42,21 @@ client) to enable "Continue with Google". Email/password works without it.
 
 ## Backup & restore
 
-(Documented fully once `/api/backup` ships in Phase 3/4: `pg_dump -Fc` + the uploads directory,
-streamed as a single `.tar.gz`. Restore is `pg_restore` the dump and copy `uploads/` back into the
-volume.)
+**Settings → Download backup** (or `GET /api/backup`) streams a `my-recipes-backup-YYYY-MM-DD.tar.gz`
+containing `db.dump` (a `pg_dump -Fc` custom-format dump) and everything under `uploads/`.
+
+**Requires `pg_dump` on the app host matching the Postgres server's major version** (16, per
+`docker-compose.yml`) — a mismatched client refuses to dump and the route returns a 500. In the
+Docker image (Phase 4) this is guaranteed by installing `postgresql-client` for the same major
+version; for local dev outside Docker, make sure whatever `pg_dump` is on your `PATH` is v16.
+
+To restore:
+
+```bash
+tar xzf my-recipes-backup-2026-01-01.tar.gz
+pg_restore -h <host> -U <user> -d <target-db> db.dump   # target db must already exist and be empty
+cp -r uploads/* /path/to/uploads/                        # copy back into the app's uploads volume
+```
+
+Verified end-to-end during Phase 3 development: restored a real export into a scratch database
+and confirmed all rows came back intact.
