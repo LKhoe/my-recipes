@@ -69,3 +69,52 @@ Choices made where SPEC.md was silent, with rationale. Newest last.
   express that short of a partial unique index trick that isn't worth the complexity here).
   Enforced by always upserting that fixed id at the service layer — a rule for Phase 2/3 code to
   respect, not something the schema itself can guarantee.
+
+## Phase 1
+
+- **OpenRouter model default.** `google/gemini-3.1-flash-lite-20260507` — checked OpenRouter's
+  current catalog rather than guessing; it's the cheapest capable structured-JSON model available
+  at the time of writing ($0.25/$1.50 per M tokens). Overridable via `OPENROUTER_MODEL` without a
+  code change, since model catalogs shift.
+
+- **`max_tokens: 4096` on every OpenRouter call.** Discovered the hard way during real-call
+  testing: with no cap, some models default to a huge `max_tokens` (65536) that a modest-credit
+  OpenRouter account can't afford, producing a 402 before any extraction happens. 4096 is
+  comfortably enough for a recipe's JSON and keeps cost predictable.
+
+- **JSON-LD ingredient/duration parsing is a deterministic regex parser, not the LLM
+  (`lib/services/ingredient-parser.ts`, `lib/services/duration.ts`).** SPEC §4.6 step 1 promises
+  the JSON-LD path is free and instant — routing its ingredient-line splitting through the LLM
+  would quietly break that promise. The parser is necessarily imperfect on unusual phrasing;
+  that's an accepted tradeoff for the no-LLM-call guarantee. The `inferred` flag is therefore
+  always `false` on this path (nothing is being estimated, just parsed-or-left-null) — estimation
+  is genuinely an LLM behavior, reserved for the two LLM paths (4.6 step 2, 4.6b).
+
+- **Import images are fetched server-side, not left as remote URLs.** SPEC §4.8 rules out external
+  object storage, so a draft's `imageUrl` (from JSON-LD `image` or a YouTube thumbnail) can't be
+  stored as-is on the recipe. `POST /api/recipes/[id]/images` accepts either a multipart upload or
+  a JSON `{ imageUrl }` body; the latter fetches server-side and runs it through the same
+  sharp/webp pipeline. This is what makes "import takes under a minute" true without a manual
+  photo step — verified end-to-end against a real YouTube video.
+
+- **Rate limiting is in-memory, per SPEC §8's no-Redis constraint** (`lib/rate-limit.ts`) — a
+  sliding window keyed by user id, 10 imports/hour. Doesn't survive a restart or scale across
+  instances, which is fine for a single self-hosted process; revisit if that ever changes.
+
+- **`Rating`/`Note`-style one-per-user tables aside, `RecipeCategory`/`RecipeTag` are replaced
+  wholesale on every save** (`replaceRecipeAssociations` in `lib/services/recipe.ts`) rather than
+  diffed — delete-then-reinsert inside the same transaction. Simpler and correct for a form-driven
+  edit UI where the client always sends the full desired state; not appropriate for a
+  high-concurrency multi-writer table, which this isn't.
+
+- **Vitest added as the test runner.** SPEC doesn't name one. Chosen over Jest for native ESM/TS
+  support with no babel/ts-jest configuration — this project has no legacy CJS test suite to stay
+  compatible with.
+
+- **Real-call verification, not just mocks.** Beyond the mocked unit tests, ran the JSON-LD path
+  against a live site (bbcgoodfood.com), the LLM fallback against a local fixture (real OpenRouter
+  call — this is what surfaced the `max_tokens` bug above), and the full YouTube pipeline against
+  two real videos supplied by the user: one Portuguese-language recipe (description path,
+  confirmed "a gosto" ↔ "to taste" handling and a missing-servings page both surface as `null`
+  rather than a guess) and one non-recipe video (confirmed the description→transcript→manual-entry
+  fallback chain completes cleanly with title/videoUrl/thumbnail prefilled, per §4.6b step 3).
