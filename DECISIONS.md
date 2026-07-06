@@ -118,3 +118,44 @@ Choices made where SPEC.md was silent, with rationale. Newest last.
   confirmed "a gosto" ↔ "to taste" handling and a missing-servings page both surface as `null`
   rather than a guess) and one non-recipe video (confirmed the description→transcript→manual-entry
   fallback chain completes cleanly with title/videoUrl/thumbnail prefilled, per §4.6b step 3).
+
+## Phase 2
+
+- **Fraction-friendly vs. practical-rounding units (§4.3) are a fixed classification, not
+  per-recipe.** `lib/scale.ts` treats `cup`/`tbsp`/`tsp`/`clove`/`slice`/`piece`/`pinch`/`dash`/
+  `bunch`/`sprig`/`stick` and no-unit (bare counts like eggs) as fraction-friendly (nearest eighth,
+  rendered as a unicode fraction); everything else (`g`, `kg`, `ml`, `l`, `oz`, `lb`, …) rounds to
+  practical precision (whole numbers above 10, one decimal below). Matches the spec's own examples
+  ("1⅓ eggs", "267 g") exactly; the line has to be drawn somewhere and this follows normal
+  culinary convention.
+
+- **`lib/youtube-utils.ts` split out from `lib/services/youtube.ts`.** The service file imports
+  `youtubei.js` (Innertube) at module scope for transcript fetching — a heavy, server-only
+  dependency. The video-embed component and the import pipeline both need pure URL parsing
+  (`parseYouTubeVideoId`/`isYouTubeUrl`); pulling that out into a dependency-free module keeps
+  `youtubei.js` out of the client bundle. `lib/services/youtube.ts` re-exports the same two
+  functions so server code didn't need to change its imports.
+
+- **Video takes priority over the hero photo on the detail page.** If a recipe has a `videoUrl`,
+  the embed replaces the photo slot rather than sitting beside it — SPEC §4.1 doesn't say which
+  wins when both exist, and showing both stacked felt redundant/heavy for something that's meant
+  to load light-weight (lite-embed pattern) at the top of the page.
+
+- **Cook Mode is a full-viewport client overlay (`fixed inset-0 z-50`), not a separate layout
+  branch.** It still lives under the `(app)` route group (so it shares session-fetching
+  conventions with the rest of `/recipes/*`) but visually covers the header behind it rather than
+  restructuring routing to opt out of the parent layout — simpler than fighting App Router's
+  layout nesting for one screen that wants to be chrome-free.
+
+- **Step timers are per-step local state, not global.** Each step with a `durationMinutes` gets
+  its own independent start/pause/reset countdown that keeps running even if you navigate to
+  another step and back (component stays mounted; only the *visible* step's timer UI is shown at
+  a time, matching "inline… for the current step" in §4.1a) — but the countdowns themselves are
+  local to the browser tab, not persisted or synced, since the spec scopes timers as "device-native
+  timers remain the Alexa skill's job" for anything beyond an on-screen countdown.
+
+- **KitchenState step-sync writes are guarded by a `WHERE activeRecipeId = recipeId` condition**
+  (`updateKitchenStep` in `lib/services/kitchen.ts`), not just a client-side `isActiveInKitchen`
+  check — verified this matters: a stale Cook Mode tab left open on a recipe that's no longer the
+  active one gets `{applied: false}` and cannot clobber whichever recipe the circle is actually
+  cooking now.

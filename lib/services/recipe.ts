@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, exists, ilike, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   recipe,
@@ -99,7 +99,71 @@ export async function softDeleteRecipe(recipeId: string, userId: string): Promis
   return result.length > 0;
 }
 
-export async function listRecipes(): Promise<RecipeListItem[]> {
+export type RecipeListFilters = {
+  /** Plain-text query, ILIKE'd against title/description/ingredient names (SPEC §4.2). */
+  q?: string;
+  categoryId?: string;
+  tag?: string;
+  ingredient?: string;
+};
+
+export async function listRecipes(filters: RecipeListFilters = {}): Promise<RecipeListItem[]> {
+  const conditions = [isNull(recipe.deletedAt)];
+
+  if (filters.q) {
+    const pattern = `%${filters.q}%`;
+    conditions.push(
+      or(
+        ilike(recipe.title, pattern),
+        ilike(recipe.description, pattern),
+        exists(
+          db
+            .select({ n: sql`1` })
+            .from(recipeIngredient)
+            .innerJoin(ingredient, eq(recipeIngredient.ingredientId, ingredient.id))
+            .where(and(eq(recipeIngredient.recipeId, recipe.id), ilike(ingredient.name, pattern))),
+        ),
+      )!,
+    );
+  }
+
+  if (filters.categoryId) {
+    conditions.push(
+      exists(
+        db
+          .select({ n: sql`1` })
+          .from(recipeCategory)
+          .where(and(eq(recipeCategory.recipeId, recipe.id), eq(recipeCategory.categoryId, filters.categoryId))),
+      ),
+    );
+  }
+
+  if (filters.tag) {
+    const pattern = `%${filters.tag}%`;
+    conditions.push(
+      exists(
+        db
+          .select({ n: sql`1` })
+          .from(recipeTag)
+          .innerJoin(tag, eq(recipeTag.tagId, tag.id))
+          .where(and(eq(recipeTag.recipeId, recipe.id), ilike(tag.name, pattern))),
+      ),
+    );
+  }
+
+  if (filters.ingredient) {
+    const pattern = `%${filters.ingredient}%`;
+    conditions.push(
+      exists(
+        db
+          .select({ n: sql`1` })
+          .from(recipeIngredient)
+          .innerJoin(ingredient, eq(recipeIngredient.ingredientId, ingredient.id))
+          .where(and(eq(recipeIngredient.recipeId, recipe.id), ilike(ingredient.name, pattern))),
+      ),
+    );
+  }
+
   const rows = await db
     .select({
       id: recipe.id,
@@ -110,7 +174,7 @@ export async function listRecipes(): Promise<RecipeListItem[]> {
     })
     .from(recipe)
     .leftJoin(user, eq(recipe.authorId, user.id))
-    .where(isNull(recipe.deletedAt))
+    .where(and(...conditions))
     .orderBy(desc(recipe.createdAt));
 
   const results: RecipeListItem[] = [];

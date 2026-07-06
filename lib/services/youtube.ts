@@ -1,29 +1,6 @@
 import { Innertube } from "youtubei.js";
 
-export function parseYouTubeVideoId(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.replace(/^www\./, "");
-
-    if (host === "youtu.be") {
-      return parsed.pathname.slice(1).split("/")[0] || null;
-    }
-
-    if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com") {
-      if (parsed.pathname === "/watch") return parsed.searchParams.get("v");
-      const shortsMatch = parsed.pathname.match(/^\/(?:shorts|embed)\/([^/]+)/);
-      if (shortsMatch) return shortsMatch[1];
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-export function isYouTubeUrl(url: string): boolean {
-  return parseYouTubeVideoId(url) !== null;
-}
+export { parseYouTubeVideoId, isYouTubeUrl } from "@/lib/youtube-utils";
 
 export type YouTubeVideoMetadata = {
   title: string;
