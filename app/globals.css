@@ -1,0 +1,142 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design system (SPEC §2a): warm, editorial, appetizing — think NYT Cooking, not an admin panel.
+ * Fraunces (display) pairs a characterful, slightly soft serif for recipe titles with Inter
+ * (body) for everything that needs to read cleanly at small sizes on a phone in the kitchen.
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-fraunces);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+
+  --shadow-soft: 0 1px 2px oklch(0.2 0.02 50 / 0.04), 0 4px 12px oklch(0.2 0.02 50 / 0.06);
+  --shadow-soft-lg: 0 2px 4px oklch(0.2 0.02 50 / 0.05), 0 12px 32px oklch(0.2 0.02 50 / 0.10);
+
+  /* Editorial type scale — display face steps down for recipe titles / section heads */
+  --text-display-2xl: 3.5rem;
+  --text-display-2xl--line-height: 1.05;
+  --text-display-2xl--letter-spacing: -0.02em;
+  --text-display-xl: 2.75rem;
+  --text-display-xl--line-height: 1.08;
+  --text-display-xl--letter-spacing: -0.02em;
+  --text-display-lg: 2.125rem;
+  --text-display-lg--line-height: 1.15;
+  --text-display-lg--letter-spacing: -0.01em;
+  --text-display-md: 1.625rem;
+  --text-display-md--line-height: 1.25;
+  --text-display-sm: 1.25rem;
+  --text-display-sm--line-height: 1.35;
+}
+
+:root {
+  --radius: 0.875rem;
+
+  /* Warm cream base, deep coffee-brown ink — never pure white/black */
+  --background: oklch(0.98 0.008 75);
+  --foreground: oklch(0.24 0.025 45);
+
+  --card: oklch(1 0.004 75);
+  --card-foreground: oklch(0.24 0.025 45);
+  --popover: oklch(1 0.004 75);
+  --popover-foreground: oklch(0.24 0.025 45);
+
+  /* Terracotta — the warm accent used for primary actions */
+  --primary: oklch(0.58 0.15 35);
+  --primary-foreground: oklch(0.98 0.01 75);
+
+  /* Muted sage — secondary accent, tags, subtle emphasis */
+  --secondary: oklch(0.93 0.025 110);
+  --secondary-foreground: oklch(0.32 0.05 130);
+
+  --muted: oklch(0.955 0.012 70);
+  --muted-foreground: oklch(0.48 0.03 50);
+
+  /* Warm gold — hover/active accent, highlights */
+  --accent: oklch(0.87 0.06 75);
+  --accent-foreground: oklch(0.3 0.05 50);
+
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.98 0.01 75);
+
+  --success: oklch(0.6 0.12 155);
+  --success-foreground: oklch(0.98 0.01 75);
+
+  --border: oklch(0.9 0.015 65);
+  --input: oklch(0.9 0.015 65);
+  --ring: oklch(0.58 0.15 35 / 0.5);
+}
+
+.dark {
+  --background: oklch(0.19 0.02 45);
+  --foreground: oklch(0.94 0.015 70);
+
+  --card: oklch(0.23 0.022 45);
+  --card-foreground: oklch(0.94 0.015 70);
+  --popover: oklch(0.23 0.022 45);
+  --popover-foreground: oklch(0.94 0.015 70);
+
+  --primary: oklch(0.68 0.15 38);
+  --primary-foreground: oklch(0.19 0.02 45);
+
+  --secondary: oklch(0.3 0.03 120);
+  --secondary-foreground: oklch(0.9 0.03 110);
+
+  --muted: oklch(0.27 0.02 50);
+  --muted-foreground: oklch(0.72 0.02 60);
+
+  --accent: oklch(0.4 0.05 70);
+  --accent-foreground: oklch(0.94 0.02 75);
+
+  --destructive: oklch(0.62 0.2 25);
+  --destructive-foreground: oklch(0.98 0.01 75);
+
+  --success: oklch(0.65 0.13 155);
+  --success-foreground: oklch(0.19 0.02 45);
+
+  --border: oklch(0.34 0.02 50);
+  --input: oklch(0.34 0.02 50);
+  --ring: oklch(0.68 0.15 38 / 0.5);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+  }
+}
