@@ -256,3 +256,56 @@ User request: translate the app to Brazilian Portuguese — pages in pt-BR, code
 
 - **`<html lang="pt-BR">`** set in the root layout — matters for screen readers and browser
   spell-check/translate-prompt heuristics, not just SEO.
+
+## Phase 4
+
+- **Migration/seed scripts duplicated as plain `.mjs` for the Docker image** (`scripts/migrate.mjs`,
+  `scripts/seed.mjs`), separate from the `tsx`/drizzle-kit-based `lib/db/seed.ts` used in dev.
+  Mirrors `yarg-aggregator`'s pattern exactly: the production image's runtime stage doesn't ship
+  `tsx` or `drizzle-kit` (dev dependencies), so migrations/seeding at container startup need
+  scripts that run under plain `node`. The category list is duplicated between the two seed
+  scripts with a "keep in sync" comment rather than shared across the TS/JS boundary — trying to
+  make a `.ts` file importable from a no-build-step `.mjs` runtime script felt like more fragility
+  than a 12-item array duplicated once was worth.
+
+- **`gen_random_uuid()` used directly in `scripts/seed.mjs`'s raw SQL** rather than generating
+  UUIDs in JS — confirmed it's built into Postgres core since v13 (no `pgcrypto` extension
+  needed), so this works out of the box against the `postgres:16-alpine` image with zero setup.
+
+- **Alexa API surface auth is a single shared-secret bearer token (`ALEXA_API_TOKEN`), not
+  per-device.** SPEC §9.1 says the surface is "token-authenticated" but the per-device PIN-pairing
+  mechanism (`AlexaDevice` table) is explicitly scoped to §9.2 as future work, not shipped in v1.
+  Since there's no device identity to check yet, one shared secret compared against the
+  `Authorization: Bearer` header is the simplest thing that satisfies "token-authenticated"
+  without inventing schema for a skill that isn't being built this phase. Every circle member's
+  Echo would present the same token — acceptable for a private single-household app; revisit if
+  the future skill build needs per-device semantics.
+
+- **`POST /api/alexa/shopping-list` targets the most-recently-created shopping list across the
+  whole circle, not a specific user's.** SPEC §5's `ShoppingList` table is per-user
+  (`ShoppingList.userId`), but the Alexa surface has no logged-in user — voice requests aren't
+  authenticated as any particular circle member, just as "the household's Echo." Rather than add
+  new schema (e.g. a circle-wide list) to serve a hook for a skill that isn't being built yet,
+  `getMostRecentShoppingListAcrossCircle()` picks whichever list (any user's) was generated last,
+  on the assumption that's the one actually in use. If the future skill needs per-user shopping
+  lists, that's the point to revisit this.
+
+- **`advanceKitchenStep` (next/previous/jump) operates on "whatever recipe is active," not a
+  caller-supplied recipe id** — unlike the web Cook Mode's `updateKitchenStep`, which always knows
+  its own recipe id and guards against writing to a no-longer-active one. The Alexa skill (when
+  built) has no independent notion of "which recipe" beyond what `/api/alexa/active-recipe`
+  already told it, so there's nothing to guard against — it's inherently always operating on the
+  active recipe. Index is clamped to the active recipe's actual step count either way.
+
+- **Dockerfile installs `postgresql16-client`** (Alpine package name, confirmed available via
+  `apk search` against `node:24-alpine`'s package index) — matches the `postgres:16-alpine`
+  service exactly, required for the backup export route's `pg_dump` (SPEC §4.9/§7).
+
+- **`docker-compose.yml` gained an `uploads_data` named volume** mounted at `/app/uploads` in the
+  app container, so recipe photos (SPEC §4.8, local-disk storage) survive container
+  rebuilds/redeploys rather than living only in the container's writable layer.
+
+- **`deploy.sh` uses generic `DEPLOY_HOST`/`DEPLOY_USER`/`DEPLOY_PORT` env var names** rather than
+  yarg-aggregator's `PI_HOST`/`PI_USER` — this app isn't necessarily deployed to a Raspberry Pi,
+  so the more generic names felt like the honest choice for a from-scratch script rather than
+  copying naming that was specific to yarg's own deploy target.

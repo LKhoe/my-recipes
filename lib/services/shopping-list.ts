@@ -63,6 +63,22 @@ export async function generateShoppingList(userId: string, recipeIds: string[]):
   });
 }
 
+/**
+ * SPEC §9.1 `POST /api/alexa/shopping-list` — "add an item by voice". The Alexa surface has no
+ * per-user identity in v1 (no device pairing, per §9.2/DECISIONS.md), but `ShoppingList` is a
+ * per-user table (SPEC §5). Rather than add schema for a circle-wide list, this targets whichever
+ * list — across any circle member — was generated most recently, on the assumption that's
+ * whatever's currently taped to the fridge. Returns null if no one has generated one yet.
+ */
+export async function getMostRecentShoppingListAcrossCircle(): Promise<{ id: string } | null> {
+  const [list] = await db
+    .select({ id: shoppingList.id })
+    .from(shoppingList)
+    .orderBy(desc(shoppingList.createdAt))
+    .limit(1);
+  return list ?? null;
+}
+
 export async function getLatestShoppingList(userId: string): Promise<ShoppingListView | null> {
   const [list] = await db
     .select({ id: shoppingList.id, createdAt: shoppingList.createdAt })

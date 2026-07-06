@@ -30,15 +30,50 @@ client) to enable "Continue with Google". Email/password works without it.
 | `DATABASE_URL` | yes | Postgres connection string |
 | `BETTER_AUTH_SECRET` | yes | Random string, session/cookie signing |
 | `BETTER_AUTH_URL` | yes | Base URL of the app |
+| `NEXT_PUBLIC_APP_URL` | yes | Public base URL (also a Docker build arg) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | Enables Google sign-in |
 | `OPENROUTER_API_KEY` | no (Phase 1+) | LLM import fallback |
+| `OPENROUTER_MODEL` | no | Overrides the default import model |
 | `YOUTUBE_API_KEY` | no (Phase 1+) | YouTube description fetch; transcripts need no key |
+| `ALEXA_API_TOKEN` | no (Phase 4+) | Shared-secret bearer token for `/api/alexa/*` |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | yes (docker-compose) | Postgres container credentials |
+| `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_PORT` | no | `deploy.sh` only — not read by the app |
 
 ## Scripts
 
 - `npm run dev` / `build` / `start`
-- `npm run lint` / `typecheck`
+- `npm run lint` / `typecheck` / `test`
 - `npm run db:generate` / `db:migrate` / `db:studio` / `db:seed`
+
+## Deployment
+
+Self-hosted via Docker, mirroring `yarg-aggregator`'s pattern: `Dockerfile` (multi-stage,
+`output: "standalone"`) + `docker-compose.yml` with two services (`my-recipes` + `postgres`).
+
+```bash
+cp .env.example .env   # fill in real secrets — this is the file docker-compose reads from
+docker compose up -d --build
+```
+
+The container entrypoint (`docker-entrypoint.sh`) waits for Postgres, runs pending Drizzle
+migrations, and re-runs the (idempotent) category seed on every start — no manual migration step
+needed after the first deploy. Recipe photos persist in the `uploads_data` volume across
+redeploys.
+
+Health check: `GET /api/health` (also used by docker-compose's own healthcheck and `deploy.sh`).
+
+### deploy.sh
+
+For deploying to a remote host over SSH (bumps the version, pushes to `main`, then rebuilds and
+restarts just the app container on the remote — Postgres stays up):
+
+```bash
+./deploy.sh              # deploy
+./deploy.sh --rollback   # restart the remote's previous image without rebuilding
+```
+
+Requires `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_PORT` in `.env` and that `~/my-recipes` (or
+wherever `REMOTE_DIR` points) on the remote host already has this repo cloned with its own `.env`.
 
 ## Backup & restore
 
@@ -46,9 +81,9 @@ client) to enable "Continue with Google". Email/password works without it.
 containing `db.dump` (a `pg_dump -Fc` custom-format dump) and everything under `uploads/`.
 
 **Requires `pg_dump` on the app host matching the Postgres server's major version** (16, per
-`docker-compose.yml`) — a mismatched client refuses to dump and the route returns a 500. In the
-Docker image (Phase 4) this is guaranteed by installing `postgresql-client` for the same major
-version; for local dev outside Docker, make sure whatever `pg_dump` is on your `PATH` is v16.
+`docker-compose.yml`) — a mismatched client refuses to dump and the route returns a 500. The
+Docker image installs `postgresql16-client` for exactly this reason; for local dev outside
+Docker, make sure whatever `pg_dump` is on your `PATH` is v16.
 
 To restore:
 
@@ -58,5 +93,20 @@ pg_restore -h <host> -U <user> -d <target-db> db.dump   # target db must already
 cp -r uploads/* /path/to/uploads/                        # copy back into the app's uploads volume
 ```
 
-Verified end-to-end during Phase 3 development: restored a real export into a scratch database
-and confirmed all rows came back intact.
+Verified end-to-end during development: restored a real export into a scratch database and
+confirmed all rows came back intact.
+
+## Alexa API surface (§9.1)
+
+Hooks-only in v1 — no skill is built or published, just a thin, token-authenticated JSON surface
+so a future skill can be added without schema/API churn:
+
+- `GET /api/alexa/active-recipe` — active recipe, scaled ingredients, current step
+- `POST /api/alexa/step` — `{ "action": "next" | "previous" | "jump", "index"? }`
+- `GET /api/alexa/quantity?ingredient=farinha` — scaled quantity for one ingredient
+- `POST /api/alexa/shopping-list` — `{ "name", "quantity"?, "unit"? }`, adds to the most
+  recently generated shopping list across the circle
+
+All four require `Authorization: Bearer <ALEXA_API_TOKEN>`. There's no per-device pairing yet
+(that's §9.2, future work) — every request uses the same shared secret, which is an acceptable
+simplification for a private single-household app. See `DECISIONS.md` for the reasoning.
