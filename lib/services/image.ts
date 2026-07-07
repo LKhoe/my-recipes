@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import path from "path";
 import fs from "fs/promises";
 import sharp from "sharp";
+import heicConvert from "heic-convert";
 import { ALLOWED_MIME_TYPES, MAX_UPLOAD_BYTES } from "@/lib/image-constants";
 
 const MAX_DIMENSION = 1600;
@@ -28,6 +29,22 @@ export async function processAndStoreImage(
     throw new ImageValidationError("A imagem excede o limite de 10 MB por envio.");
   }
 
+  // sharp's prebuilt binaries bundle libheif but not a licensed HEVC decoder, so a real iPhone
+  // .heic photo fails there — pre-convert through heic-convert (a WASM libheif build that does
+  // include HEVC decoding) to a JPEG buffer first, then hand that to the same sharp pipeline
+  // below. See DECISIONS.md "HEIC upload support" — verified against a real HEVC-encoded file.
+  let sourceBuffer: Buffer = buffer;
+  if (mimeType === "image/heic" || mimeType === "image/heif") {
+    try {
+      const converted = await heicConvert({ buffer, format: "JPEG", quality: 0.92 });
+      sourceBuffer = Buffer.from(converted);
+    } catch {
+      throw new ImageValidationError(
+        "Não foi possível processar esta foto HEIC/HEIF. Tente convertê-la para JPEG antes de enviar.",
+      );
+    }
+  }
+
   const relativePath = path.posix.join("recipes", recipeId, `${randomUUID()}.webp`);
   const relativeThumbPath = thumbnailPathFor(relativePath);
   const absolutePath = path.join(UPLOADS_DIR, relativePath);
@@ -35,7 +52,7 @@ export async function processAndStoreImage(
 
   await fs.mkdir(path.dirname(absolutePath), { recursive: true });
 
-  const image = sharp(buffer, { failOn: "none" }).rotate();
+  const image = sharp(sourceBuffer, { failOn: "none" }).rotate();
 
   await image
     .clone()

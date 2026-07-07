@@ -402,3 +402,40 @@ didn't arrive via JSON-LD import.
   requires a running, migrated Postgres — consistent with how this project's own docs already
   assume `docker compose up -d postgres` before local dev, so not a new requirement in practice,
   but worth naming since every other test file is DB-free.
+
+## 2026-07-07 — HEIC upload support
+
+A review flagged that `lib/image-constants.ts` advertises `image/heic`/`image/heif` support, but
+sharp's prebuilt binaries bundle libheif *without* a licensed HEVC decoder (patent/licensing
+reasons) — so a real iPhone photo (H.265/HEVC-encoded, not the royalty-free AV1 codec sharp does
+support) was suspected to fail. Confirmed exactly that: generated a real HEVC `.heic` file with
+macOS's `sips -s format heic`, ran it through `sharp(buffer)` directly (`heif: Decoder plugin
+generated an error: Unspecified (7.0)`), then through the real upload endpoint against both the
+dev server and the built Docker image — both 500'd with the generic "Falha ao enviar a imagem."
+message, i.e. silently advertised support that broke.
+
+- **Chose to add working decoding, not remove support**, after confirming a viable path exists:
+  `heic-convert` (built on `libheif-js`, an Emscripten/WASM build of libheif that — unlike sharp's
+  prebuilt binary — does include an HEVC decoder) successfully decoded the same real HEVC fixture
+  that sharp rejected. Verified the decoded output pixel-for-pixel matched the known source color
+  by rendering it, not just checking that bytes came out. `processAndStoreImage`
+  (`lib/services/image.ts`) now pre-converts HEIC/HEIF buffers to JPEG via `heic-convert` before
+  handing them to the existing sharp resize/webp pipeline, unchanged for every other format.
+
+- **Why this and not the `ALLOWED_MIME_TYPES` removal the review offered as the fallback option**:
+  removing support would have meant deviating from SPEC §4.8's explicit "JPEG/PNG/WebP/HEIC
+  input" requirement over a problem that turned out to have a real fix; `heic-convert` is pure
+  JS+WASM (confirmed no native bindings, no `.node` files, no postinstall compilation step) with
+  zero dependencies of its own, so it drops cleanly into the Alpine-based Docker build without a
+  native toolchain — verified by rebuilding the image and uploading the same HEVC fixture through
+  the running container.
+
+- **`heic-convert`'s `convert()` (not `.all()`) takes just the primary image** from the HEIC
+  container — correct here since a recipe photo upload is always one image; `.all()` exists for
+  multi-picture HEIC files (bursts, live photos) which isn't a case this app needs to handle.
+
+- **Added a real-file regression test** (`lib/services/image.test.ts` +
+  `fixtures/image/sample.heic`, a genuine ~600-byte HEVC-encoded fixture generated the same way as
+  the manual verification, not a renamed JPEG) — the second DB/filesystem-touching integration
+  test in this project (after `recipe.test.ts`), on the same reasoning: a mocked test can't catch
+  "the codec isn't actually there," only a real file through the real decode path can.

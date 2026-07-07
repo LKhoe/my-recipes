@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import Image from "next/image";
 import { Label } from "@/components/ui/label";
 import { X, ImagePlus, Loader2 } from "lucide-react";
-import { MAX_PHOTOS_PER_RECIPE } from "@/lib/image-constants";
+import { ALLOWED_MIME_TYPES, MAX_PHOTOS_PER_RECIPE } from "@/lib/image-constants";
 
 export type UploadedImage = { id: string; path: string };
 
@@ -109,7 +109,7 @@ export function ImageManager({
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+        accept={ALLOWED_MIME_TYPES.join(",")}
         multiple
         className="hidden"
         onChange={(e) => {
