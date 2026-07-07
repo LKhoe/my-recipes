@@ -180,6 +180,32 @@ export const recipeCookPhoto = pgTable(
   ],
 );
 
+// Circle-shared "pulo do gato" tips — like recipeCookPhoto, visible to everyone rather than
+// private like rating/note, since a cooking trick is only useful if the whole circle can see it.
+// `stepIndex` is a plain array index into recipe.steps (steps aren't a separate table), null for
+// a general recipe-wide tip not tied to any single step.
+export const recipeTip = pgTable(
+  "recipe_tip",
+  {
+    id: text("id")
+      .primaryKey()
+      .$default(() => randomUUID()),
+    recipeId: text("recipe_id")
+      .notNull()
+      .references(() => recipe.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    stepIndex: integer("step_index"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("recipe_tip_recipe_id_idx").on(table.recipeId),
+    index("recipe_tip_user_id_idx").on(table.userId),
+  ],
+);
+
 // ---------------------------------------------------------------------------
 // Ingredients (canonicalized — SPEC §4.5a)
 // ---------------------------------------------------------------------------
@@ -420,6 +446,7 @@ export const userRelations = relations(user, ({ many }) => ({
   ratings: many(rating),
   notes: many(note),
   cookPhotos: many(recipeCookPhoto),
+  tips: many(recipeTip),
   createdInviteCodes: many(inviteCode, { relationName: "createdInvites" }),
 }));
 
@@ -427,6 +454,7 @@ export const recipeRelations = relations(recipe, ({ one, many }) => ({
   author: one(user, { fields: [recipe.authorId], references: [user.id] }),
   images: many(recipeImage),
   cookPhotos: many(recipeCookPhoto),
+  tips: many(recipeTip),
   ingredients: many(recipeIngredient),
   categories: many(recipeCategory),
   tags: many(recipeTag),
@@ -437,6 +465,11 @@ export const recipeRelations = relations(recipe, ({ one, many }) => ({
 export const recipeCookPhotoRelations = relations(recipeCookPhoto, ({ one }) => ({
   recipe: one(recipe, { fields: [recipeCookPhoto.recipeId], references: [recipe.id] }),
   user: one(user, { fields: [recipeCookPhoto.userId], references: [user.id] }),
+}));
+
+export const recipeTipRelations = relations(recipeTip, ({ one }) => ({
+  recipe: one(recipe, { fields: [recipeTip.recipeId], references: [recipe.id] }),
+  user: one(user, { fields: [recipeTip.userId], references: [user.id] }),
 }));
 
 export const recipeImageRelations = relations(recipeImage, ({ one }) => ({

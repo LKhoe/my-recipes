@@ -613,3 +613,40 @@ case.
   upload from one user hits the per-user cap with a 400 while the other user is unaffected, and
   confirmed `GET /api/uploads/...` serves the stored `.webp` back correctly. All test accounts,
   invite codes, DB rows, and uploaded files were deleted afterward.
+
+## 2026-07-07 — Feat: "pulo do gato" tips, optionally linked to a step
+
+- **Circle-shared, like cook photos, not private like ratings/notes** — same reasoning as the cook
+  photos feature: a cooking trick only helps if everyone in the circle can see it. Deletion is
+  still author-only (`deleteTip` filters by `userId`), matching the same ownership pattern as cook
+  photos.
+- **`stepIndex` is a plain nullable integer, not a foreign key** — `recipe.steps` is a `jsonb`
+  array on the `recipe` row, not a separate table (see `RecipeStep` in `lib/db/schema.ts`), so
+  there's no step row to reference. `stepIndex: null` means a general, recipe-wide tip;
+  `stepIndex: 0..n` is a plain array index into that recipe's `steps`. This means a tip silently
+  points at the wrong step if the recipe's steps are later reordered or deleted via the editor —
+  accepted as a real but minor edge case (same class of risk as `mealPlanEntry`/`shoppingListItem`
+  referencing ingredients by name rather than a stronger key elsewhere in this codebase); not
+  worth a step-identity system for a "quick tip" feature.
+- **UI is a cat icon (`lucide-react`'s `Cat`) next to each step** in `RecipeSteps.tsx` — clicking it
+  opens a `Popover` (`StepTip.tsx`) showing that step's existing tips (author + delete-own) plus an
+  inline add form; a small badge shows the tip count so a step with a known trick is visible before
+  clicking. A separate "Pulo do gato" section (`GeneralTips.tsx`) lower on the recipe page holds
+  tips with no step attached, mirroring the private-notes/cook-photos section pattern already on
+  that page.
+- **Split `RecipeSteps` into its own client component**, replacing what had been static
+  server-rendered JSX directly in `app/(app)/recipes/[id]/page.tsx` — the per-step popover-open
+  state and tip list need to live in the client. The step-linked and general tips are fetched once
+  server-side (`listTips`) and partitioned by `stepIndex === null` before being handed to the two
+  components as separate props, avoiding a second round-trip API call for what's otherwise one
+  small table.
+- **Verified for real** against the live dev server: bootstrapped two real accounts through the
+  actual invite+sign-up flow, added a step-linked tip as one user and a general tip as the other via
+  the real API, confirmed both are visible to both users (circle-shared) and correctly separated by
+  `stepIndex`, confirmed the non-author gets 403 deleting the other's tip while the author gets 200,
+  confirmed an empty body is rejected with 400, and drove the actual browser UI via Playwright
+  (logged in through the real `/login` form): confirmed a cat icon renders next to every step,
+  confirmed the general tip shows in the "Pulo do gato" section rather than any step's popover,
+  added a new tip through the real per-step form and watched the badge count update to 1 and the
+  tip text render in the popover — zero console errors. All test accounts, invite codes, and tip
+  rows were deleted afterward.

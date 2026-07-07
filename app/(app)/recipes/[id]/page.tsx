@@ -8,6 +8,7 @@ import { getUserRating } from "@/lib/services/rating";
 import { getUserNote } from "@/lib/services/note";
 import { getKitchenState } from "@/lib/services/kitchen";
 import { listCookPhotos } from "@/lib/services/cook-photo";
+import { listTips } from "@/lib/services/tip";
 import { Button } from "@/components/ui/button";
 import { DeleteRecipeButton } from "@/components/recipes/DeleteRecipeButton";
 import { YouTubeEmbed } from "@/components/recipes/YouTubeEmbed";
@@ -15,6 +16,8 @@ import { RecipeCookingControls } from "@/components/recipes/RecipeCookingControl
 import { RatingStars } from "@/components/recipes/RatingStars";
 import { PrivateNotes } from "@/components/recipes/PrivateNotes";
 import { CookPhotoGallery } from "@/components/recipes/CookPhotoGallery";
+import { RecipeSteps } from "@/components/recipes/RecipeSteps";
+import { GeneralTips } from "@/components/recipes/GeneralTips";
 import { Pencil, ChefHat, Clock, Users } from "lucide-react";
 
 export default async function RecipeDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -23,12 +26,15 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
   const recipe = await getRecipeById(id);
   if (!recipe) notFound();
 
-  const [rating, noteBody, kitchenState, cookPhotos] = await Promise.all([
+  const [rating, noteBody, kitchenState, cookPhotos, tips] = await Promise.all([
     session?.user ? getUserRating(session.user.id, id) : Promise.resolve(null),
     session?.user ? getUserNote(session.user.id, id) : Promise.resolve(null),
     getKitchenState(),
     listCookPhotos(id),
+    listTips(id),
   ]);
+  const stepTips = tips.filter((t) => t.stepIndex !== null);
+  const generalTips = tips.filter((t) => t.stepIndex === null);
 
   const heroImage = recipe.images[0];
   const isAuthor = session?.user?.id === recipe.authorId;
@@ -120,21 +126,12 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
 
         <section>
           <h2 className="font-display text-display-sm text-foreground">Modo de preparo</h2>
-          <ol className="mt-3 flex flex-col gap-4">
-            {recipe.steps.map((step, i) => (
-              <li key={i} className="flex gap-3">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-medium text-primary-foreground">
-                  {i + 1}
-                </span>
-                <div>
-                  <p className="text-foreground">{step.text}</p>
-                  {step.durationMinutes && (
-                    <p className="mt-1 text-xs text-muted-foreground">{step.durationMinutes} min</p>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ol>
+          <RecipeSteps
+            recipeId={recipe.id}
+            steps={recipe.steps}
+            currentUserId={session?.user?.id ?? null}
+            initialTips={stepTips}
+          />
         </section>
       </div>
 
@@ -154,6 +151,19 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
           <p className="mt-1 text-xs text-muted-foreground">Visível para todo o círculo.</p>
           <div className="mt-3">
             <CookPhotoGallery recipeId={recipe.id} currentUserId={session.user.id} initialPhotos={cookPhotos} />
+          </div>
+        </section>
+      )}
+
+      {session?.user && (
+        <section className="mt-10 border-t border-border pt-6">
+          <h2 className="font-display text-display-sm text-foreground">Pulo do gato</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Truques gerais para esta receita — visível para todo o círculo. Dicas de um passo
+            específico aparecem no ícone do gato ao lado do passo.
+          </p>
+          <div className="mt-3">
+            <GeneralTips recipeId={recipe.id} currentUserId={session.user.id} initialTips={generalTips} />
           </div>
         </section>
       )}
