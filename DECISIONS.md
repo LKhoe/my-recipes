@@ -466,3 +466,13 @@ message, i.e. silently advertised support that broke.
   conditional `UPDATE ... WHERE usedAt IS NULL RETURNING` moved earlier, before user creation,
   with a rollback path if it fails) — that would be a real fix but is more invasive than what was
   asked here. Flagging it in case closing this race for real is wanted as follow-up.
+
+- **`kitchen_state` gets a `CHECK (id = 'singleton')` constraint** (migration
+  `0001_numerous_ikaris.sql`), on top of the existing primary key. The primary key already blocks
+  a *second* row from ever existing; the check constraint additionally guarantees the one row
+  that's allowed can only ever be the well-known `SINGLETON_KITCHEN_STATE_ID` — so a bug that
+  tried to insert some other id fails loudly at the DB instead of silently creating a stray row
+  the app would never read. Verified by actually trying to violate it (`INSERT ... VALUES
+  ('not-the-singleton')` → `ERROR: violates check constraint`) and by re-running the real
+  send-to-kitchen flow twice through the live server afterward to confirm the legitimate
+  `onConflictDoUpdate` upsert path is unaffected.

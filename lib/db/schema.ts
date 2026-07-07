@@ -10,8 +10,9 @@ import {
   pgEnum,
   index,
   unique,
+  check,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 // ---------------------------------------------------------------------------
@@ -365,15 +366,25 @@ export const shoppingListItem = pgTable(
 
 export const SINGLETON_KITCHEN_STATE_ID = "singleton";
 
-export const kitchenState = pgTable("kitchen_state", {
-  id: text("id").primaryKey().default(SINGLETON_KITCHEN_STATE_ID),
-  activeRecipeId: text("active_recipe_id").references(() => recipe.id, {
-    onDelete: "set null",
-  }),
-  servingsOverride: integer("servings_override"),
-  currentStepIndex: integer("current_step_index").notNull().default(0),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+export const kitchenState = pgTable(
+  "kitchen_state",
+  {
+    id: text("id").primaryKey().default(SINGLETON_KITCHEN_STATE_ID),
+    activeRecipeId: text("active_recipe_id").references(() => recipe.id, {
+      onDelete: "set null",
+    }),
+    servingsOverride: integer("servings_override"),
+    currentStepIndex: integer("current_step_index").notNull().default(0),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    // DB-enforced singleton: the primary key already blocks a second row from ever being
+    // inserted, but this additionally guarantees the one row that exists can only ever be
+    // "singleton" — a stray insert/update with a different id fails loudly at the DB instead of
+    // silently creating a second, never-read kitchen_state row that the app would just ignore.
+    check("kitchen_state_singleton_id", sql`${table.id} = 'singleton'`),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // Relations

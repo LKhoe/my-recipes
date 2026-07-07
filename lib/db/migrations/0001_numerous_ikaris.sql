@@ -1,0 +1,1 @@
+ALTER TABLE "kitchen_state" ADD CONSTRAINT "kitchen_state_singleton_id" CHECK ("kitchen_state"."id" = 'singleton');
