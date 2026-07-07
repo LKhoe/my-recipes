@@ -476,3 +476,13 @@ message, i.e. silently advertised support that broke.
   ('not-the-singleton')` → `ERROR: violates check constraint`) and by re-running the real
   send-to-kitchen flow twice through the live server afterward to confirm the legitimate
   `onConflictDoUpdate` upsert path is unaffected.
+
+- **Added a test (`lib/db/seed.test.ts`) asserting `lib/db/seed.ts` and `scripts/seed.mjs`'s
+  category lists stay in sync**, closing the loop on the "keep in sync" comment left when the
+  list was first duplicated (pt-BR translation work). Can't just `import` either file to compare
+  arrays — both run their seed immediately on import as a side effect (`seed.ts` even calls
+  `process.exit(0)`, which would kill the test runner), so the test instead extracts each file's
+  `CATEGORIES` array straight out of its source text via regex + `JSON.parse` (safe here since the
+  array is always plain double-quoted strings) rather than executing either module. Verified the
+  test isn't a tautology by deliberately breaking sync (renamed one entry in `scripts/seed.mjs`),
+  confirming it fails with a clean diff, then reverting.
