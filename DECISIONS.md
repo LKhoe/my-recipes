@@ -345,3 +345,60 @@ clip-art. Verified by rendering the SVG to PNG at 16/32/48/96px and inspecting e
   `next-themes` provider is wired into `layout.tsx` despite the dependency being installed) — dark
   mode is inert tokens, not a live feature. Hardcoding light-mode cream is correct for the app as
   it actually behaves today; revisit if dark mode is ever wired up for real.
+
+## 2026-07-07 — Unit normalization at the service layer (bug fix)
+
+A code review against the dev DB found `recipe_ingredient.unit` holding, side by side, `csp`,
+`colher de sopa`, `colheres (sopa)`, `colheres`, `fatia`, `fatias`, `dente`, `dentes` — the LLM
+extraction path and the manual edit form's free-text unit field both wrote straight to the
+database with no normalization, even though `lib/services/ingredient-parser.ts` already had a
+`UNIT_ALIASES` table (used only by the JSON-LD import path's line parser). This silently broke
+shopping-list merging (`lib/shopping-list-merge.ts` keys on exact unit-string equality) and
+fraction-friendly scaling (`lib/scale.ts` only recognizes canonical tokens) for anything that
+didn't arrive via JSON-LD import.
+
+- **Fix: normalize at the service layer, not per-import-path.** Added `normalizeUnit()` to
+  `ingredient-parser.ts` — an exact-match (trim + lowercase) lookup against the same
+  `UNIT_ALIASES` table, distinct from `parseLeadingUnit()` (which pulls a unit off the front of a
+  whole ingredient *line* via prefix matching). `lib/services/recipe.ts`'s
+  `replaceRecipeAssociations` now runs every incoming `item.unit` through it before insert — this
+  is the single choke point all three save paths (manual form, LLM extraction, JSON-LD import)
+  already go through, so fixing it there fixes all three regardless of what upstream code does or
+  doesn't normalize.
+
+- **Unrecognized units are stored as-typed (trimmed/lowercased), not rejected.** SPEC doesn't
+  define a closed unit vocabulary; rejecting a real but unusual unit (e.g. "gomos" for orange
+  segments) would block saving a real recipe over a cosmetic mismatch. This only guarantees
+  *known* variants collapse to one token — it doesn't guarantee every possible unit string is
+  canonical, which is an inherent, accepted limit given SPEC's open vocabulary.
+
+- **Added alias entries for the variants actually observed**: `"colheres (sopa)"`,
+  `"colher (sopa)"`, and the "chá" parenthesized equivalents, all → `csp`/`cch`. `fatias`/`dentes`
+  were already correctly aliased in the table (the bug was that normalization was never *invoked*,
+  not that the table was incomplete for those) — new entries only were the parenthesized and bare
+  forms.
+
+- **Bare "colher"/"colheres" (no "de sopa"/"de chá" qualifier) defaults to tablespoon (`csp`).**
+  Genuinely ambiguous in isolation, but confirmed against the dev DB's real data (3 colheres de
+  açúcar in a bolo recipe) that this is the Brazilian convention: unqualified "colher" means
+  tablespoon; teaspoon is almost always spelled out as "de chá" explicitly. Flagging this as a
+  judgment call rather than a certainty — revisit if a real recipe surfaces where this default is
+  wrong.
+
+- **One-off cleanup script** (`_normalize-units.ts`, same throwaway pattern as
+  `_translate-categories.ts` from the pt-BR translation work): selected distinct units from both
+  `recipe_ingredient` and `shopping_list_item`, ran each through `normalizeUnit()`, and `UPDATE`d
+  in place where it changed. Ran against the dev DB (`colher de sopa`→`csp` ×2, `colheres (sopa)`
+  →`csp` ×3, `colheres`→`csp` ×1, `fatias`→`fatia` ×2, `dentes`→`dente` ×1;
+  `shopping_list_item` had zero rows at the time), re-ran the distinct-units query to confirm only
+  canonical tokens remained, then deleted the script.
+
+- **Added a real-DB integration test** (`lib/services/recipe.test.ts`) — the first test in this
+  project to touch a live database rather than mocks/fixtures, per the project's own preference
+  for verifying against real data. It creates a throwaway user + recipe with dirty units
+  (`"colher de sopa"`, `"fatias"`), reads it back via `getRecipeById`, asserts the stored units are
+  `csp`/`fatia`, and deletes the throwaway user in `afterAll` (cascades to the recipe/
+  recipeIngredient rows via the existing `onDelete: "cascade"` FK). This means `npm test` now
+  requires a running, migrated Postgres — consistent with how this project's own docs already
+  assume `docker compose up -d postgres` before local dev, so not a new requirement in practice,
+  but worth naming since every other test file is DB-free.

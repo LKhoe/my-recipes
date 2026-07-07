@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseIngredientLine } from "./ingredient-parser";
+import { normalizeUnit, parseIngredientLine } from "./ingredient-parser";
 
 describe("parseIngredientLine", () => {
   it("parses a mixed-fraction quantity with unit and note", () => {
@@ -95,5 +95,31 @@ describe("parseIngredientLine", () => {
       name: "garlic",
       note: null,
     });
+  });
+});
+
+describe("normalizeUnit", () => {
+  it("normalizes known raw variants observed in the dev DB to their canonical token", () => {
+    expect(normalizeUnit("colher de sopa")).toBe("csp");
+    expect(normalizeUnit("colheres (sopa)")).toBe("csp");
+    expect(normalizeUnit("colheres")).toBe("csp");
+    expect(normalizeUnit("fatias")).toBe("fatia");
+    expect(normalizeUnit("dentes")).toBe("dente");
+  });
+
+  it("is case-insensitive and trims whitespace", () => {
+    expect(normalizeUnit("  Colheres (Sopa)  ")).toBe("csp");
+    expect(normalizeUnit(" G ")).toBe("g");
+  });
+
+  it("stores an unrecognized unit as-typed (trimmed/lowercased) rather than rejecting it", () => {
+    expect(normalizeUnit("gomos")).toBe("gomos");
+  });
+
+  it("returns null for null, undefined, or empty input", () => {
+    expect(normalizeUnit(null)).toBeNull();
+    expect(normalizeUnit(undefined)).toBeNull();
+    expect(normalizeUnit("")).toBeNull();
+    expect(normalizeUnit("   ")).toBeNull();
   });
 });

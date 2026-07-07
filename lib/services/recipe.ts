@@ -12,6 +12,7 @@ import {
   user,
 } from "@/lib/db/schema";
 import { findOrCreateIngredient } from "@/lib/services/ingredient";
+import { normalizeUnit } from "@/lib/services/ingredient-parser";
 import { findOrCreateTag } from "@/lib/services/tag";
 import type { RecipeDetail, RecipeInput, RecipeListItem } from "@/types";
 
@@ -30,7 +31,9 @@ async function replaceRecipeAssociations(
       recipeId,
       ingredientId: canonical.id,
       quantity: item.quantity !== null ? String(item.quantity) : null,
-      unit: item.unit,
+      // Normalized here (not trusted from the caller) so it holds regardless of which path the
+      // data arrives by — manual form free-text, LLM extraction, or JSON-LD import.
+      unit: normalizeUnit(item.unit),
       note: item.note,
       order: index,
     });

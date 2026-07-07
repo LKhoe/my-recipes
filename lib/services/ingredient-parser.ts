@@ -75,6 +75,13 @@ const UNIT_ALIASES: Record<string, string> = {
   csp: "csp",
   "colher de sopa": "csp",
   "colheres de sopa": "csp",
+  "colher (sopa)": "csp",
+  "colheres (sopa)": "csp",
+  // Bare "colher(es)" with no "de sopa"/"de chá" qualifier is genuinely ambiguous, but Brazilian
+  // recipes overwhelmingly mean tablespoon when unqualified (teaspoon is almost always spelled
+  // out as "de chá") — see DECISIONS.md "Unit normalization at the service layer" for this call.
+  colher: "csp",
+  colheres: "csp",
   tbsp: "csp",
   tablespoon: "csp",
   tablespoons: "csp",
@@ -83,6 +90,10 @@ const UNIT_ALIASES: Record<string, string> = {
   "colher de cha": "cch",
   "colheres de chá": "cch",
   "colheres de cha": "cch",
+  "colher (chá)": "cch",
+  "colher (cha)": "cch",
+  "colheres (chá)": "cch",
+  "colheres (cha)": "cch",
   tsp: "cch",
   teaspoon: "cch",
   teaspoons: "cch",
@@ -146,6 +157,26 @@ const UNIT_ALIASES: Record<string, string> = {
 
 // Longest phrase first, so "colher de sopa" is tried before a bare "colher" would (wrongly) match.
 const UNIT_PHRASES = Object.keys(UNIT_ALIASES).sort((a, b) => b.length - a.length);
+
+/**
+ * Normalizes a standalone unit string (as opposed to `parseLeadingUnit`, which pulls a unit off
+ * the front of a whole ingredient *line*) through the same alias table — an exact match after
+ * trimming/lowercasing, not a prefix search. Used at the service layer (`lib/services/recipe.ts`)
+ * so every save path (manual form, LLM extraction, JSON-LD import) ends up with the same
+ * canonical token regardless of how the unit string arrived — see DECISIONS.md "Unit
+ * normalization at the service layer".
+ *
+ * An unrecognized unit is stored as-typed (trimmed/lowercased), not rejected — SPEC doesn't
+ * define a closed unit vocabulary, and rejecting an unusual-but-valid unit would block saving a
+ * real recipe over a cosmetic mismatch.
+ */
+export function normalizeUnit(rawUnit: string | null | undefined): string | null {
+  if (!rawUnit) return null;
+  const trimmed = rawUnit.trim();
+  if (!trimmed) return null;
+  const key = trimmed.toLowerCase();
+  return UNIT_ALIASES[key] ?? key;
+}
 
 export type ParsedIngredientLine = {
   quantity: number | null;
