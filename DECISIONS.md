@@ -309,3 +309,39 @@ User request: translate the app to Brazilian Portuguese — pages in pt-BR, code
   yarg-aggregator's `PI_HOST`/`PI_USER` — this app isn't necessarily deployed to a Raspberry Pi,
   so the more generic names felt like the honest choice for a from-scratch script rather than
   copying naming that was specific to yarg's own deploy target.
+
+## App logo
+
+Requested standalone: a mark for the app, not tied to a spec section. Design: a steaming bowl,
+rendered as a handful of soft bezier curves (bowl silhouette + a shaded crescent for depth + an
+open-rim ellipse cutout + two tapering steam curls) — simple enough to stay legible at 16px
+favicon size, warm/appetizing per §2a's "food should look inviting" without reading as generic
+clip-art. Verified by rendering the SVG to PNG at 16/32/48/96px and inspecting each.
+
+- **Colors computed from the actual design tokens, not eyeballed.** Wrote a small standalone
+  OKLCH→sRGB conversion script (public-domain CSS Color 4 formulas, no dependency) against the
+  exact `--primary`/`--foreground`/`--background` values in `app/globals.css`, so the logo's
+  terracotta/cream/gold are the same colors as the rest of the UI, not a close-but-off match:
+  primary `#C25237`, background `#FCF8F3`, a darker shade-only tone `#76392A` (unused elsewhere,
+  derived the same way, for the bowl's interior shading), and a mid-gold `#CD995C` for the steam
+  (the `--accent` token itself, `#EECFA9`, was too pale to read against cream at small sizes).
+
+- **Artwork exists in two places kept manually in sync: `app/icon.svg` (static, Next.js's
+  metadata-file favicon convention) and `components/icons/RecipeBowlMark.tsx` (inline React, used
+  in the app header and auth screen).** Next's `app/icon.svg` convention needs a real static file
+  fetchable at a URL for the `<link rel="icon">` tag; the header/auth usages need an inline
+  component (to size/color it in context, and so it isn't a network request). A single source of
+  truth would've meant generating one from the other at build time for a two-file, rarely-changed
+  asset — not worth the tooling.
+
+- **Fixed a real bug this surfaced: `proxy.ts`'s middleware matcher excluded `favicon.ico` but not
+  Next's `icon.svg` route**, so unauthenticated requests for the favicon were being redirected to
+  `/login` (serving login HTML instead of the SVG) — caught by actually curling `/icon.svg` as a
+  logged-out request rather than assuming the metadata-file convention was automatically exempt.
+  Added `icon.svg` to the matcher's negative lookahead alongside `favicon.ico`.
+
+- **The rim cutout is a hardcoded cream ellipse (`#FCF8F3`), not theme-aware.** `globals.css` has
+  a `.dark` token set, but nothing in the app currently applies the `.dark` class (no
+  `next-themes` provider is wired into `layout.tsx` despite the dependency being installed) — dark
+  mode is inert tokens, not a live feature. Hardcoding light-mode cream is correct for the app as
+  it actually behaves today; revisit if dark mode is ever wired up for real.

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { UserMenu } from "@/components/auth/UserMenu";
+import { Logo } from "@/components/Logo";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -10,8 +11,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-background">
       <header className="flex items-center justify-between border-b border-border px-6 py-4">
         <div className="flex items-center gap-6">
-          <Link href="/recipes" className="font-display text-display-sm text-foreground">
-            Minhas Receitas
+          <Link href="/recipes">
+            <Logo />
           </Link>
           <nav className="hidden items-center gap-4 text-sm text-muted-foreground sm:flex">
             <Link href="/recipes" className="hover:text-foreground">
