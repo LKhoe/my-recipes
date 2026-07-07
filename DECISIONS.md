@@ -486,3 +486,36 @@ message, i.e. silently advertised support that broke.
   array is always plain double-quoted strings) rather than executing either module. Verified the
   test isn't a tautology by deliberately breaking sync (renamed one entry in `scripts/seed.mjs`),
   confirming it fails with a clean diff, then reverting.
+
+- **README now documents `db.dump` as sensitive** (it's a full, unfiltered `pg_dump` — confirmed
+  by reading `collectPgDump()`: no `--exclude-table`, so `account`'s password hashes/OAuth tokens
+  and `session`'s live session tokens are in every backup) **and gives `docker exec
+  my-recipes-postgres pg_dump -U postgres -Fc my_recipes > ...` as the unattended-backup path**,
+  since `/api/backup` is session-authed like every other route and can't be curled by a cron job
+  without first scripting a login. Chose the direct `docker exec pg_dump` route over adding a
+  separate unauthenticated/API-key-gated backup endpoint — no new auth surface needed, and it's
+  the same command an admin would already reach for on a self-hosted Docker box. Deliberately
+  scoped it to the DB only (not `uploads/`) and pointed at a separate volume-level `rsync`/`tar`
+  for photos, rather than reimplementing the tar-stream packaging outside the app just for a doc
+  example. Verified the one-liner for real: ran it against the actual running container and
+  confirmed `pg_restore -l` reads the output back as a valid archive.
+
+## SPEC §4.6 step 3 — in-browser Prompt API (documentation gap, not a missed feature)
+
+A review noted this had no DECISIONS.md entry. Confirmed via a repo-wide search: no code for it
+exists anywhere (`lib/services/import.ts`'s `importFromWebpage` only ever does step 1 — JSON-LD —
+then falls straight to step 2's server-side LLM call; there's no client-side inference component
+and no page-fetch proxy endpoint for it either).
+
+This was a deliberate skip, not an oversight — the very first instruction that kicked off this
+project's Phase 0 explicitly named it: "No feature creep: anything in §8 (Non-Goals) stays out,
+including the in-browser Prompt API if you're tempted — imports are server-side." (Note: SPEC.md's
+own §8 Non-Goals list doesn't actually mention this — that instruction came from the user directly,
+alongside the spec, at the start of the build.) SPEC §4.6 itself frames step 3 as "an optimization
+when available," not a hard requirement, which is consistent with it being droppable without
+under-delivering on the spec's actual functional ask (recipes still import correctly via steps 1
+and 2 for every browser, Chrome-with-Gemini-Nano or not).
+
+Not re-flagging this as something to build — it was already a deliberate call the user made
+up front, not a gap that slipped through. Documenting it here purely to close the audit trail gap
+the review found.

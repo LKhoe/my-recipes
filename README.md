@@ -80,10 +80,28 @@ wherever `REMOTE_DIR` points) on the remote host already has this repo cloned wi
 **Settings → Download backup** (or `GET /api/backup`) streams a `my-recipes-backup-YYYY-MM-DD.tar.gz`
 containing `db.dump` (a `pg_dump -Fc` custom-format dump) and everything under `uploads/`.
 
+**⚠️ Treat every backup archive as a secret.** `db.dump` is a full, unfiltered dump of the
+database — it includes the `account` table (password hashes, and OAuth access/refresh tokens for
+anyone who signed in with Google) and the `session` table (live session tokens, valid until they
+expire, that could be replayed to hijack a signed-in session). Store archives the same way you'd
+store a password vault export: not in a shared/public Drive folder, not emailed unencrypted.
+
 **Requires `pg_dump` on the app host matching the Postgres server's major version** (16, per
 `docker-compose.yml`) — a mismatched client refuses to dump and the route returns a 500. The
 Docker image installs `postgresql16-client` for exactly this reason; for local dev outside
 Docker, make sure whatever `pg_dump` is on your `PATH` is v16.
+
+**`/api/backup` requires a logged-in session** (like every other route), so it can't be curled
+unattended for a nightly/cron backup without first scripting a login. For automated backups, skip
+the HTTP route entirely and `pg_dump` the Postgres container directly instead:
+
+```bash
+docker exec my-recipes-postgres pg_dump -U postgres -Fc my_recipes > "my-recipes-$(date +%F).dump"
+```
+
+This produces the same `-Fc` format as `db.dump` inside the app's own backup archive (restorable
+the same way below) but skips `uploads/` — pair it with a separate `rsync`/`tar` of the
+`uploads_data` volume if photos need to be included in unattended backups too.
 
 To restore:
 
