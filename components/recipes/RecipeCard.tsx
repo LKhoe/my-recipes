@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChefHat } from "lucide-react";
 import type { RecipeListItem } from "@/types";
+import { imageSrc } from "@/lib/image-url";
 
 export function RecipeCard({ recipe }: { recipe: RecipeListItem }) {
   return (
@@ -12,7 +13,7 @@ export function RecipeCard({ recipe }: { recipe: RecipeListItem }) {
       <div className="relative aspect-4/3 w-full overflow-hidden bg-muted">
         {recipe.imagePath ? (
           <Image
-            src={`/api/uploads/${recipe.imagePath}`}
+            src={imageSrc(recipe.imagePath)}
             alt={recipe.title}
             fill
             unoptimized

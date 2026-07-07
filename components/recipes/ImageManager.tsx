@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Label } from "@/components/ui/label";
 import { X, ImagePlus, Loader2 } from "lucide-react";
 import { ALLOWED_MIME_TYPES, MAX_PHOTOS_PER_RECIPE } from "@/lib/image-constants";
+import { imageSrc } from "@/lib/image-url";
 
 export type UploadedImage = { id: string; path: string };
 
@@ -71,7 +72,7 @@ export function ImageManager({
       <div className="flex flex-wrap gap-3">
         {images.map((img) => (
           <div key={img.id} className="group relative size-24 overflow-hidden rounded-lg border border-border">
-            <Image src={`/api/uploads/${img.path}`} alt="" fill className="object-cover" unoptimized />
+            <Image src={imageSrc(img.path)} alt="" fill className="object-cover" unoptimized />
             <button
               type="button"
               onClick={() => handleRemoveUploaded(img.id)}

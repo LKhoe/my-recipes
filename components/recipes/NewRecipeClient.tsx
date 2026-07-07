@@ -24,7 +24,10 @@ function draftToFormValues(draft: RecipeDraft): Partial<RecipeFormValues> {
 
 export function NewRecipeClient({ categories }: { categories: { id: string; name: string }[] }) {
   const [draft, setDraft] = useState<RecipeDraft | null>(null);
-  const [manualPrefill, setManualPrefill] = useState<Partial<RecipeFormValues> | null>(null);
+  const [manualPrefill, setManualPrefill] = useState<{
+    values: Partial<RecipeFormValues>;
+    imageUrl: string | null;
+  } | null>(null);
 
   if (draft?.recipeFound) {
     return (
@@ -38,7 +41,14 @@ export function NewRecipeClient({ categories }: { categories: { id: string; name
   }
 
   if (manualPrefill) {
-    return <RecipeForm mode="create" categories={categories} initialValues={manualPrefill} />;
+    return (
+      <RecipeForm
+        mode="create"
+        categories={categories}
+        initialValues={manualPrefill.values}
+        initialRemoteImageUrl={manualPrefill.imageUrl}
+      />
+    );
   }
 
   return (
@@ -55,11 +65,14 @@ export function NewRecipeClient({ categories }: { categories: { id: string; name
               setDraft(result);
             } else {
               // SPEC §4.6b step 3: no recipe found in the video — open manual entry with
-              // title/videoUrl prefilled from the video's own metadata.
+              // title/videoUrl/thumbnail prefilled from the video's own metadata.
               setManualPrefill({
-                title: result.title,
-                sourceUrl: result.sourceUrl,
-                videoUrl: result.videoUrl,
+                values: {
+                  title: result.title,
+                  sourceUrl: result.sourceUrl,
+                  videoUrl: result.videoUrl,
+                },
+                imageUrl: result.imageUrl,
               });
             }
           }}

@@ -118,10 +118,13 @@ export function RecipeForm({
         const created = await res.json();
         if (pendingFiles.length > 0) await uploadPendingFiles(created.id, pendingFiles);
         if (pendingFiles.length === 0 && initialRemoteImageUrl) {
+          // A YouTube import's thumbnail is stored as its own URL rather than downloaded (see
+          // DECISIONS.md "Fix: YouTube import uses the video thumbnail URL directly") — `videoUrl`
+          // is only set for YouTube imports, never for webpage imports.
           await fetch(`/api/recipes/${created.id}/images`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ imageUrl: initialRemoteImageUrl }),
+            body: JSON.stringify({ imageUrl: initialRemoteImageUrl, external: Boolean(values.videoUrl) }),
           }).catch(() => {});
         }
         router.push(`/recipes/${created.id}`);

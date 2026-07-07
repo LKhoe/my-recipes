@@ -9,6 +9,7 @@ import { getUserNote } from "@/lib/services/note";
 import { getKitchenState } from "@/lib/services/kitchen";
 import { listCookPhotos } from "@/lib/services/cook-photo";
 import { listTips } from "@/lib/services/tip";
+import { imageSrc } from "@/lib/image-url";
 import { Button } from "@/components/ui/button";
 import { DeleteRecipeButton } from "@/components/recipes/DeleteRecipeButton";
 import { YouTubeEmbed } from "@/components/recipes/YouTubeEmbed";
@@ -49,7 +50,7 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
       ) : heroImage ? (
         <div className="relative mb-6 aspect-16/9 w-full overflow-hidden rounded-2xl bg-muted">
           <Image
-            src={`/api/uploads/${heroImage.path}`}
+            src={imageSrc(heroImage.path)}
             alt={recipe.title}
             fill
             unoptimized

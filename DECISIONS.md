@@ -650,3 +650,62 @@ case.
   added a new tip through the real per-step form and watched the badge count update to 1 and the
   tip text render in the popover — zero console errors. All test accounts, invite codes, and tip
   rows were deleted afterward.
+
+## 2026-07-07 — Fix: YouTube import uses the video thumbnail URL directly
+
+- **Only YouTube imports change — webpage (JSON-LD/LLM) imports still download and re-host their
+  source image locally**, unchanged. The bug report was specifically about YouTube; a generic
+  webpage's `og:image` can disappear or block hotlinking, so downloading it remains the safer
+  default there. `RecipeDraft.videoUrl` (only ever set by `importFromYouTube` in
+  `lib/services/import.ts`) is the existing, already-correct signal for which case applies —
+  no new field needed to distinguish them.
+- **`recipeImage.path` can now hold either a local relative path or a full external URL** — no
+  schema/column change; the column's meaning was already "whatever a browser needs to render this
+  image," and an absolute `https://` URL satisfies that just as well as a relative path resolved
+  through `/api/uploads/`. Added `lib/image-url.ts` (`isExternalImageUrl`/`imageSrc`, client-safe,
+  no Node imports) as the one shared place that distinguishes the two, and updated every call site
+  that built a `/api/uploads/${path}` src from a `recipeImage.path` — the recipe detail page's hero
+  image, `RecipeCard` (the recipe list — "the main page" the request called out), and
+  `ImageManager`'s already-saved-image previews. `CookPhotoGallery`/`recipeCookPhoto.path` was left
+  untouched since cook photos are never externally sourced.
+- **Locked the passthrough to `i.ytimg.com` only** (`ALLOWED_EXTERNAL_IMAGE_HOSTS` in
+  `lib/image-constants.ts`), checked server-side in `POST /api/recipes/:id/images` before ever
+  writing a `recipeImage` row. Without this, the same `{imageUrl, external: true}` JSON body shape
+  would let a client attach *any* URL to a recipe's image with no server-side fetch/validation at
+  all — low severity (it's rendered as a plain `<img src>`, not fetched server-side, so this isn't
+  SSRF), but there's no reason to allow it beyond the one real use case, so it's allowlisted rather
+  than left open.
+- **`deleteImageFiles` now no-ops for an external URL** — there's no local file to remove; the
+  webp double-file convention (`thumbnailPathFor`) never existed for an external URL. Regression
+  test added in `lib/services/image.test.ts` confirming this doesn't throw (a naive
+  `path.join(UPLOADS_DIR, "https://...")` wouldn't crash either, since it isn't an absolute path
+  and `fs.rm(..., {force:true})` swallows "not found," but the explicit early-return is clearer
+  than relying on that).
+- **Fixed a related, smaller pre-existing gap noticed while reading `NewRecipeClient.tsx`**: when
+  a YouTube import's LLM extraction fails to find a full recipe (`recipeFound: false` — SPEC
+  §4.6b step 3, falls back to manual entry with just title/videoUrl prefilled), the thumbnail URL
+  was silently dropped entirely — `setManualPrefill` never carried `result.imageUrl` through to
+  `RecipeForm`'s `initialRemoteImageUrl` prop. Since this is the same YouTube-thumbnail-handling
+  path the request was about, not a separate feature, fixed it alongside: `manualPrefill` state now
+  holds `{ values, imageUrl }` instead of just form values.
+- **Manual picture upload during import already overrode the auto-thumbnail before this change**
+  (`RecipeForm.tsx`'s existing `pendingFiles.length === 0 && initialRemoteImageUrl` gate) — nothing
+  needed here; verified this still holds since the gate is untouched.
+- **Verified for real**, hitting the actual external YouTube Data API (a real `YOUTUBE_API_KEY` is
+  configured in this environment) against a real, stable, extremely well-known video
+  (`dQw4w9WgXcQ`, chosen specifically for its stability as a public test fixture — not a real
+  recipe, so `recipeFound: false`, which is irrelevant to what was being tested): confirmed
+  `POST /api/recipes/import` returns `imageUrl: "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"`;
+  created a real recipe via the API and attached that URL through the new
+  `{imageUrl, external: true}` path — confirmed the stored `recipeImage.path` is the raw URL
+  verbatim, confirmed **no file or directory was ever created under `uploads/`**, confirmed a
+  disallowed host and a malformed URL are both rejected with 400 and insert no row, confirmed the
+  pre-existing non-external download path is completely unchanged (still downloads and stores a
+  local `.webp` + thumbnail when `external` is omitted), and confirmed deleting that downloaded
+  image still removes its local files. Drove the actual browser via Playwright to the real recipe
+  list page and visually confirmed the real Rick Astley YouTube thumbnail renders directly from
+  `i.ytimg.com` in the recipe card (screenshot-verified, not just DOM-attribute-checked — an
+  earlier screenshot taken before the image finished loading showed a blank placeholder, which
+  a longer wait resolved, confirming it was a timing artifact and not a rendering bug). All test
+  data (recipe, image row, account, invite code) was deleted afterward — the recipe's cascading
+  delete on its author's account was relied on for final cleanup, verified empty after.

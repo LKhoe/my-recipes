@@ -3,7 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 import sharp from "sharp";
 import { afterEach, describe, expect, it } from "vitest";
-import { processAndStoreImage, UPLOADS_DIR } from "./image";
+import { deleteImageFiles, processAndStoreImage, UPLOADS_DIR } from "./image";
 
 // Regression test for the HEIC upload bug (DECISIONS.md "HEIC upload support"): sharp's prebuilt
 // binaries can't decode real (HEVC-encoded) .heic photos on their own, so processAndStoreImage
@@ -28,5 +28,14 @@ describe("processAndStoreImage HEIC support", () => {
     expect(metadata.format).toBe("webp");
     expect(metadata.width).toBeGreaterThan(0);
     expect(metadata.height).toBeGreaterThan(0);
+  });
+});
+
+// Regression test for DECISIONS.md "Fix: YouTube import uses the video thumbnail URL directly" —
+// an external-URL recipeImage.path has no local file, so deleting it must not throw or attempt
+// an fs.rm against a nonsense path built from the URL.
+describe("deleteImageFiles with an external URL", () => {
+  it("is a no-op and does not throw", async () => {
+    await expect(deleteImageFiles("https://i.ytimg.com/vi/abc123/hqdefault.jpg")).resolves.toBeUndefined();
   });
 });

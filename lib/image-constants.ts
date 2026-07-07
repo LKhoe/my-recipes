@@ -7,3 +7,8 @@ export const MAX_PHOTOS_PER_RECIPE = 6;
 // "HEIC upload support": lib/services/image.ts pre-converts these to JPEG via heic-convert (a
 // WASM libheif build that does include HEVC decoding) before handing the buffer to sharp.
 export const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
+// The only host a client is allowed to register as an "external" recipe image (i.e. stored as a
+// bare URL instead of downloaded) — YouTube's thumbnail CDN, per the YouTube Data API's
+// `thumbnails.high.url` (see lib/services/youtube.ts). Keeps this passthrough from being usable
+// to attach an arbitrary attacker-controlled URL to a recipe.
+export const ALLOWED_EXTERNAL_IMAGE_HOSTS = ["i.ytimg.com"];

@@ -4,6 +4,7 @@ import fs from "fs/promises";
 import sharp from "sharp";
 import heicConvert from "heic-convert";
 import { ALLOWED_MIME_TYPES, MAX_UPLOAD_BYTES } from "@/lib/image-constants";
+import { isExternalImageUrl } from "@/lib/image-url";
 
 const MAX_DIMENSION = 1600;
 const THUMBNAIL_DIMENSION = 400;
@@ -75,6 +76,10 @@ export async function processAndStoreImage(
 }
 
 export async function deleteImageFiles(relativePath: string): Promise<void> {
+  // A YouTube-thumbnail image (see processAndStoreImage's callers) stores the remote URL
+  // directly rather than a local file — nothing to remove from disk.
+  if (isExternalImageUrl(relativePath)) return;
+
   const absolutePath = path.join(UPLOADS_DIR, relativePath);
   const absoluteThumbPath = path.join(UPLOADS_DIR, thumbnailPathFor(relativePath));
   await Promise.all([
