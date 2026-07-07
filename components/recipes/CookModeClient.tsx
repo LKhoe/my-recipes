@@ -5,6 +5,8 @@ import Link from "next/link";
 import { X, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Play, Pause, RotateCcw, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatIngredientLine } from "@/lib/format";
+import { useIngredientScaling } from "@/hooks/use-ingredient-scaling";
+import { ScaleControls } from "@/components/recipes/ScaleControls";
 import type { RecipeIngredientInput, RecipeStep } from "@/types";
 
 type WakeLockSentinelLike = { release: () => Promise<void> };
@@ -93,7 +95,7 @@ export function CookModeClient({
   );
   const [checkedSteps, setCheckedSteps] = useState<Set<number>>(new Set());
   const [ingredientsOpen, setIngredientsOpen] = useState(false);
-  const [servings, setServings] = useState(originalServings);
+  const { factor, servings, setFactor, adjustServings } = useIngredientScaling(originalServings);
   const isFirstRender = useRef(true);
 
   // Screen Wake Lock API — keeps the display on for the duration of cooking. Released on unmount,
@@ -177,35 +179,12 @@ export function CookModeClient({
       </button>
       {ingredientsOpen && (
         <div className="max-h-64 overflow-y-auto border-b border-border bg-muted/30 px-4 py-3">
-          {originalServings && servings && (
-            <div className="mb-2 flex items-center gap-2 text-sm">
-              <button
-                type="button"
-                onClick={() => setServings((s) => Math.max(1, (s ?? 1) - 1))}
-                className="flex size-7 items-center justify-center rounded-full border border-border"
-                aria-label="Menos porções"
-              >
-                -
-              </button>
-              <span>{servings} porções</span>
-              <button
-                type="button"
-                onClick={() => setServings((s) => (s ?? 1) + 1)}
-                className="flex size-7 items-center justify-center rounded-full border border-border"
-                aria-label="Mais porções"
-              >
-                +
-              </button>
-            </div>
-          )}
+          <div className="mb-2">
+            <ScaleControls servings={servings} factor={factor} onAdjustServings={adjustServings} onSetFactor={setFactor} />
+          </div>
           <ul className="flex flex-col gap-1.5 text-sm">
             {ingredients.map((item, i) => (
-              <li key={i}>
-                {formatIngredientLine(
-                  item,
-                  originalServings && servings ? { originalServings, targetServings: servings } : null,
-                )}
-              </li>
+              <li key={i}>{formatIngredientLine(item, factor)}</li>
             ))}
           </ul>
         </div>

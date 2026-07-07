@@ -542,3 +542,39 @@ case.
   the live API and the actual rendered `/recipes` search page, confirmed accented queries still
   work unchanged, and added a real-DB regression test (`lib/services/recipe.test.ts`) creating a
   recipe with a diacritic in its title and searching for it without one.
+
+## 2026-07-07 — Feat: multiply ingredients by a factor
+
+- **Unified servings-based scaling and factor-based scaling behind one number** rather than
+  building the factor multiplier as a separate, parallel control. A servings ratio *is* a factor
+  (`targetServings / originalServings`); the +/- servings stepper and the new 1x/1.5x/2x/3x
+  quick-select buttons are just two different UIs for setting the same underlying multiplier. This
+  also fixes a real pre-existing gap noticed while implementing this: recipes with no known
+  `servings` (common for imports where the source never stated one) previously had **no scaling
+  control at all** — the old component only rendered the +/- stepper when `originalServings` was
+  truthy. The factor buttons now work unconditionally, since they don't need a baseline servings
+  count to multiply by.
+- **Extracted the shared logic** into `hooks/use-ingredient-scaling.ts` (the factor↔servings
+  math + state) and `components/recipes/ScaleControls.tsx` (the buttons/stepper UI), used by both
+  `ScalableIngredients` (recipe detail) and `CookModeClient` (Cook Mode) — both previously
+  duplicated their own `+/-` servings logic verbatim; the new factor feature would have tripled
+  that duplication if added separately to each.
+- **`formatIngredientLine`'s second parameter changed from `{ originalServings, targetServings }`
+  to a plain `factor: number`** — the servings pair was just a roundabout way of expressing a
+  factor (`scaleQuantity` immediately divided them back down to a ratio). `lib/services/kitchen.ts`
+  (the Alexa surface's ingredient scaling) is untouched — it calls `scaleQuantity`/
+  `formatScaledQuantity` directly, not `formatIngredientLine`, so this change doesn't reach it, and
+  the Alexa surface didn't need a "multiply by factor" affordance of its own.
+- **A custom-factor text input sits alongside the quick presets** ("Outro") for values like 0.75x
+  or 2.5x that aren't one of the four presets — parses a comma or period as the decimal separator
+  (pt-BR types "1,5") and clears itself after applying.
+- **No automated test for the interactive scaling behavior itself** — this project has
+  deliberately skipped UI test coverage since Phase 0, and adding one now would've meant pulling in
+  jsdom + `@testing-library/react` (neither installed) for a single hook. Verified instead with a
+  real browser: installed Playwright (not previously a project dependency; used ad hoc for this
+  verification only, not added to `package.json`), logged into the actual running dev server
+  through the real `/login` form, and drove the real recipe detail page and Cook Mode — confirmed
+  2x/3x/custom-1.5x all correctly multiply every ingredient's displayed quantity (including
+  fraction-friendly rendering, e.g. 2 ovo → 4½ ovo at a 2.25x factor), confirmed the servings
+  stepper and factor buttons stay in sync in both directions, and confirmed zero console errors.
+  `formatIngredientLine`'s pure multiplication math itself is covered by `lib/format.test.ts`.

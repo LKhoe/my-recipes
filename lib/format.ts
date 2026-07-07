@@ -1,4 +1,4 @@
-import { formatScaledQuantity, scaleQuantity } from "@/lib/scale";
+import { formatScaledQuantity } from "@/lib/scale";
 
 export function formatIngredientLine(
   item: {
@@ -7,12 +7,10 @@ export function formatIngredientLine(
     ingredientName: string;
     note: string | null;
   },
-  scale: { originalServings: number; targetServings: number } | null = null,
+  /** Multiplies the stored quantity directly — e.g. 2 for "double this recipe" or 1.5 for "1.5x". */
+  factor: number = 1,
 ): string {
-  const quantity =
-    item.quantity !== null && scale && scale.originalServings !== scale.targetServings
-      ? scaleQuantity(item.quantity, scale.originalServings, scale.targetServings)
-      : item.quantity;
+  const quantity = item.quantity !== null && factor !== 1 ? item.quantity * factor : item.quantity;
 
   const parts = [formatScaledQuantity(quantity, item.unit), item.unit, item.ingredientName].filter(Boolean);
   const base = parts.join(" ");
