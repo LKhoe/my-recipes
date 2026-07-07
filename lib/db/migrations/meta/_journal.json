@@ -15,6 +15,13 @@
       "when": 1783440303732,
       "tag": "0001_numerous_ikaris",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783455579995,
+      "tag": "0002_enable_unaccent_extension",
+      "breakpoints": true
     }
   ]
 }

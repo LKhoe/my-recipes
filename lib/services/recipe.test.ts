@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { user } from "@/lib/db/schema";
-import { createRecipe, getRecipeById } from "./recipe";
+import { createRecipe, getRecipeById, listRecipes } from "./recipe";
 
 // Integration test — hits the real dev database (per this project's convention: verify against
 // real data, not just mocks). Requires `docker compose up -d postgres` and a migrated DATABASE_URL,
@@ -51,5 +51,42 @@ describe("createRecipe unit normalization", () => {
     expect(acucar?.unit).toBe("csp");
     expect(queijo?.unit).toBe("fatia");
     expect(sal?.unit).toBeNull();
+  });
+});
+
+describe("listRecipes accent-insensitive search", () => {
+  const testEmail = `accent-search-test-${Date.now()}@example.com`;
+  let userId: string;
+
+  afterAll(async () => {
+    if (userId) await db.delete(user).where(eq(user.id, userId));
+  });
+
+  it("finds a recipe by title even when the query drops diacritics (bug: plain ILIKE missed 'salmao' vs 'Salmão')", async () => {
+    const [created] = await db
+      .insert(user)
+      .values({ email: testEmail, name: "Accent Search Test" })
+      .returning({ id: user.id });
+    userId = created.id;
+
+    const uniqueTitle = `Salmão de teste ${Date.now()}`;
+    await createRecipe(userId, {
+      title: uniqueTitle,
+      description: null,
+      servings: 2,
+      prepTime: null,
+      cookTime: null,
+      steps: [{ text: "Asse." }],
+      ingredients: [],
+      categoryIds: [],
+      tags: [],
+      sourceUrl: null,
+      videoUrl: null,
+    });
+
+    const withoutAccent = uniqueTitle.replace("ã", "a");
+    const results = await listRecipes({ q: withoutAccent });
+
+    expect(results.some((r) => r.title === uniqueTitle)).toBe(true);
   });
 });

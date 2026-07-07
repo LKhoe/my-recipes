@@ -1,4 +1,5 @@
-import { and, desc, eq, exists, ilike, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, exists, isNull, or, sql, type SQL } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db";
 import {
   recipe,
@@ -15,6 +16,14 @@ import { findOrCreateIngredient } from "@/lib/services/ingredient";
 import { normalizeUnit } from "@/lib/services/ingredient-parser";
 import { findOrCreateTag } from "@/lib/services/tag";
 import type { RecipeDetail, RecipeInput, RecipeListItem } from "@/types";
+
+// Accent-insensitive ILIKE (SPEC §4.2's "adequate at this scale" plain-ILIKE search) — plain
+// `ilike()` alone would miss e.g. "salmao" typed against a recipe titled "Salmão...", which is
+// common in pt-BR (non-Brazilian keyboards, fast typing, autocomplete stripping diacritics).
+// unaccent() is a Postgres contrib extension enabled via migration 0002, not a new dependency.
+function unaccentIlike(column: AnyPgColumn, pattern: string): SQL {
+  return sql`unaccent(${column}) ilike unaccent(${pattern})`;
+}
 
 async function replaceRecipeAssociations(
   tx: typeof db,
@@ -117,14 +126,14 @@ export async function listRecipes(filters: RecipeListFilters = {}): Promise<Reci
     const pattern = `%${filters.q}%`;
     conditions.push(
       or(
-        ilike(recipe.title, pattern),
-        ilike(recipe.description, pattern),
+        unaccentIlike(recipe.title, pattern),
+        unaccentIlike(recipe.description, pattern),
         exists(
           db
             .select({ n: sql`1` })
             .from(recipeIngredient)
             .innerJoin(ingredient, eq(recipeIngredient.ingredientId, ingredient.id))
-            .where(and(eq(recipeIngredient.recipeId, recipe.id), ilike(ingredient.name, pattern))),
+            .where(and(eq(recipeIngredient.recipeId, recipe.id), unaccentIlike(ingredient.name, pattern))),
         ),
       )!,
     );
@@ -149,7 +158,7 @@ export async function listRecipes(filters: RecipeListFilters = {}): Promise<Reci
           .select({ n: sql`1` })
           .from(recipeTag)
           .innerJoin(tag, eq(recipeTag.tagId, tag.id))
-          .where(and(eq(recipeTag.recipeId, recipe.id), ilike(tag.name, pattern))),
+          .where(and(eq(recipeTag.recipeId, recipe.id), unaccentIlike(tag.name, pattern))),
       ),
     );
   }
@@ -162,7 +171,7 @@ export async function listRecipes(filters: RecipeListFilters = {}): Promise<Reci
           .select({ n: sql`1` })
           .from(recipeIngredient)
           .innerJoin(ingredient, eq(recipeIngredient.ingredientId, ingredient.id))
-          .where(and(eq(recipeIngredient.recipeId, recipe.id), ilike(ingredient.name, pattern))),
+          .where(and(eq(recipeIngredient.recipeId, recipe.id), unaccentIlike(ingredient.name, pattern))),
       ),
     );
   }

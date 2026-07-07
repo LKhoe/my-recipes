@@ -519,3 +519,26 @@ and 2 for every browser, Chrome-with-Gemini-Nano or not).
 Not re-flagging this as something to build — it was already a deliberate call the user made
 up front, not a gap that slipped through. Documenting it here purely to close the audit trail gap
 the review found.
+
+## 2026-07-07 — Fix: search was accent-sensitive
+
+User-reported bug: "the search page is bugged," no further detail. Investigated by exercising
+every filter (`q`, `categoryId`, `tag`, `ingredient`) against real recipe data via the live API
+and the rendered page — all mechanically worked (correct results, no errors) until testing a
+diacritic-free query: searching `salmao` against a recipe titled "Salmão ao molho de alcaparras"
+returned zero results. Plain Postgres `ILIKE` is case-insensitive but not accent-insensitive, and
+dropping diacritics when typing is extremely common in pt-BR (non-Brazilian keyboards, fast
+typing, autocomplete) — this is a real, high-impact bug for the app's actual audience, not an edge
+case.
+
+- **Fix: wrap every search-path `ILIKE` in Postgres's `unaccent()`** (`lib/services/recipe.ts`'s
+  new `unaccentIlike()` helper), applied to both sides of the comparison. `unaccent` is a standard
+  Postgres contrib extension already bundled with `postgres:16-alpine` — not a new runtime
+  dependency — enabled via a hand-authored custom migration (`drizzle-kit generate --custom`,
+  since `CREATE EXTENSION` isn't something drizzle-kit can diff from `schema.ts`). Runs
+  automatically on any deploy via the existing migration-on-boot entrypoint, same as every other
+  migration.
+- Verified for real: confirmed `salmao`/`camarao` (no accent) now return the matching recipes via
+  the live API and the actual rendered `/recipes` search page, confirmed accented queries still
+  work unchanged, and added a real-DB regression test (`lib/services/recipe.test.ts`) creating a
+  recipe with a diacritic in its title and searching for it without one.
