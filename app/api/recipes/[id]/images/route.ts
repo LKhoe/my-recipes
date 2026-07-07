@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
+import path from "path";
 import { eq, sql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       mimeType = file.type;
     }
 
-    const { path: storedPath } = await processAndStoreImage(recipeId, buffer, mimeType);
+    const { path: storedPath } = await processAndStoreImage(path.posix.join("recipes", recipeId), buffer, mimeType);
 
     const [created] = await db
       .insert(recipeImage)

@@ -578,3 +578,38 @@ case.
   fraction-friendly rendering, e.g. 2 ovo → 4½ ovo at a 2.25x factor), confirmed the servings
   stepper and factor buttons stay in sync in both directions, and confirmed zero console errors.
   `formatIngredientLine`'s pure multiplication math itself is covered by `lib/format.test.ts`.
+
+## 2026-07-07 — Feat: photos of the finished dish
+
+- **Visibility is circle-shared, not private** — every other per-user recipe annotation (ratings
+  in `lib/services/rating.ts`, notes in `lib/services/note.ts`) is scoped to the viewing user only.
+  Cook photos deliberately break that pattern: a new `recipe_cook_photo` row is visible to every
+  circle member, not just its uploader, because a photo of the finished dish is naturally a
+  "look what I made" share in a family app, not a private annotation. **Deletion stays
+  private-style** — only the uploader can delete their own photo (`deleteCookPhoto` filters by
+  `userId` in its `WHERE`), matching the ownership model of ratings/notes even though visibility
+  doesn't.
+- **Reused the recipe cover-photo pipeline** rather than writing a second image processor:
+  `processAndStoreImage`'s first parameter was generalized from a bare `recipeId` to a full
+  `relativeDir` string (`recipes/{recipeId}` for cover photos, `recipes/{recipeId}/cooked` for cook
+  photos), so both features share one sharp/HEIC-conversion/validation path. `deleteImageFiles` and
+  the `MAX_UPLOAD_BYTES`/`ALLOWED_MIME_TYPES` validation are shared unchanged.
+- **A separate per-user cap, not a per-recipe cap** — `MAX_PHOTOS_PER_RECIPE` (6, already defined
+  for cover photos) is reused but counted per `(recipeId, userId)` pair via
+  `countUserCookPhotos`, not per recipe overall. A shared gallery with a single recipe-wide cap
+  would let one enthusiastic uploader crowd out everyone else's photos; capping per-uploader avoids
+  that without needing a new constant.
+- **New table `recipe_cook_photo`** (migration `0003_ordinary_gressill.sql`) rather than reusing
+  `recipe_image` with a "kind" discriminator column — cover photos are author-owned and singular
+  per recipe (used as the hero image), cook photos are a multi-user append-only gallery with a
+  different ownership/deletion model; conflating them into one table with a type flag would have
+  made every cover-photo query need an extra `WHERE kind = 'cover'` filter for no real benefit.
+- **Verified for real** against the live dev server and its actual Postgres container: bootstrapped
+  two real accounts through the actual invite-code + sign-up flow (`POST /api/invite` →
+  `POST /api/auth/sign-up/email`, then `POST /api/invite/generate` from account 1 to mint a second
+  code for account 2), uploaded photos as both users against a real existing recipe, confirmed both
+  users' photos list for both viewers (circle-shared), confirmed the non-uploader gets 403 on
+  `DELETE /api/recipes/:id/cook-photos/:photoId` while the uploader gets 200, confirmed the 7th
+  upload from one user hits the per-user cap with a 400 while the other user is unaffected, and
+  confirmed `GET /api/uploads/...` serves the stored `.webp` back correctly. All test accounts,
+  invite codes, DB rows, and uploaded files were deleted afterward.

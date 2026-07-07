@@ -17,8 +17,13 @@ function thumbnailPathFor(relativePath: string): string {
   return relativePath.slice(0, -ext.length) + "-thumb" + ext;
 }
 
+/**
+ * @param relativeDir Where under `uploads/` to store this image, e.g. `recipes/{recipeId}` for a
+ *   recipe's own cover photos or `recipes/{recipeId}/cooked` for a circle member's "I made this"
+ *   photo — kept in a distinct subfolder so the two collections don't mix.
+ */
 export async function processAndStoreImage(
-  recipeId: string,
+  relativeDir: string,
   buffer: Buffer,
   mimeType: string,
 ): Promise<{ path: string }> {
@@ -45,7 +50,7 @@ export async function processAndStoreImage(
     }
   }
 
-  const relativePath = path.posix.join("recipes", recipeId, `${randomUUID()}.webp`);
+  const relativePath = path.posix.join(relativeDir, `${randomUUID()}.webp`);
   const relativeThumbPath = thumbnailPathFor(relativePath);
   const absolutePath = path.join(UPLOADS_DIR, relativePath);
   const absoluteThumbPath = path.join(UPLOADS_DIR, relativeThumbPath);

@@ -11,16 +11,16 @@ import { processAndStoreImage, UPLOADS_DIR } from "./image";
 // file (produced with macOS `sips -s format heic`), not a renamed JPEG — this only proves
 // anything because the fixture is genuinely HEVC.
 describe("processAndStoreImage HEIC support", () => {
-  const testRecipeId = "image-test-heic-fixture";
+  const testRelativeDir = path.posix.join("recipes", "image-test-heic-fixture");
 
   afterEach(async () => {
-    await fs.rm(path.join(UPLOADS_DIR, "recipes", testRecipeId), { recursive: true, force: true });
+    await fs.rm(path.join(UPLOADS_DIR, testRelativeDir), { recursive: true, force: true });
   });
 
   it("decodes a real HEVC-encoded .heic file into a valid webp", async () => {
     const buffer = readFileSync(path.join(process.cwd(), "fixtures", "image", "sample.heic"));
 
-    const { path: relativePath } = await processAndStoreImage(testRecipeId, buffer, "image/heic");
+    const { path: relativePath } = await processAndStoreImage(testRelativeDir, buffer, "image/heic");
 
     const absolutePath = path.join(UPLOADS_DIR, relativePath);
     const metadata = await sharp(absolutePath).metadata();

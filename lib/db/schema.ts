@@ -155,6 +155,31 @@ export const recipeImage = pgTable(
   (table) => [index("recipe_image_recipe_id_idx").on(table.recipeId)],
 );
 
+// Circle members' own "I made this" photos of the finished dish — distinct from recipeImage
+// (the recipe's own cover photos, author-controlled). Visible to the whole circle, like the
+// recipe itself, not private like ratings/notes: showing what everyone's actually cooked is the
+// point of a shared family recipe box.
+export const recipeCookPhoto = pgTable(
+  "recipe_cook_photo",
+  {
+    id: text("id")
+      .primaryKey()
+      .$default(() => randomUUID()),
+    recipeId: text("recipe_id")
+      .notNull()
+      .references(() => recipe.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    path: text("path").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("recipe_cook_photo_recipe_id_idx").on(table.recipeId),
+    index("recipe_cook_photo_user_id_idx").on(table.userId),
+  ],
+);
+
 // ---------------------------------------------------------------------------
 // Ingredients (canonicalized — SPEC §4.5a)
 // ---------------------------------------------------------------------------
@@ -394,17 +419,24 @@ export const userRelations = relations(user, ({ many }) => ({
   recipes: many(recipe),
   ratings: many(rating),
   notes: many(note),
+  cookPhotos: many(recipeCookPhoto),
   createdInviteCodes: many(inviteCode, { relationName: "createdInvites" }),
 }));
 
 export const recipeRelations = relations(recipe, ({ one, many }) => ({
   author: one(user, { fields: [recipe.authorId], references: [user.id] }),
   images: many(recipeImage),
+  cookPhotos: many(recipeCookPhoto),
   ingredients: many(recipeIngredient),
   categories: many(recipeCategory),
   tags: many(recipeTag),
   ratings: many(rating),
   notes: many(note),
+}));
+
+export const recipeCookPhotoRelations = relations(recipeCookPhoto, ({ one }) => ({
+  recipe: one(recipe, { fields: [recipeCookPhoto.recipeId], references: [recipe.id] }),
+  user: one(user, { fields: [recipeCookPhoto.userId], references: [user.id] }),
 }));
 
 export const recipeImageRelations = relations(recipeImage, ({ one }) => ({
