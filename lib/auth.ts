@@ -63,7 +63,19 @@ export const auth = betterAuth({
           const cookieHeader = context?.headers?.get("cookie");
           const code = extractPendingInviteCode(cookieHeader);
           if (code) {
-            await redeemInviteCode(code, user.id);
+            const redeemed = await redeemInviteCode(code, user.id);
+            // Can happen if two sign-ups race on the same invite code between the `before` hook's
+            // check and this `after` hook's write — `before` only confirms the code was
+            // redeemable at that instant, not that it still is by the time this runs. The user
+            // account already exists at this point (this hook fires after creation), so there's
+            // nothing to roll back; surfacing it loudly is what makes a double-use visible rather
+            // than silently letting a second account in on a code meant for one signup.
+            if (!redeemed) {
+              console.warn(
+                `[auth] Invite code "${code}" could not be redeemed for user ${user.id} — ` +
+                  "likely already used by a concurrent sign-up.",
+              );
+            }
           }
         },
       },

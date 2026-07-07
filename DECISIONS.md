@@ -439,3 +439,30 @@ message, i.e. silently advertised support that broke.
   the manual verification, not a renamed JPEG) — the second DB/filesystem-touching integration
   test in this project (after `recipe.test.ts`), on the same reasoning: a mocked test can't catch
   "the codec isn't actually there," only a real file through the real decode path can.
+
+## 2026-07-07 — Smaller hardening items
+
+- **`lib/services/alexa-auth.ts` now compares tokens via `crypto.timingSafeEqual` over SHA-256
+  digests of both sides**, not `===`. Hashing first sidesteps `timingSafeEqual`'s requirement that
+  both buffers be the same length (a raw token comparison can't guarantee that without leaking a
+  length signal via an early-return) and means the digest length reveals nothing about the actual
+  token's length either. Verified against the real running server: correct token still gets past
+  auth (404 "no active recipe," as expected with no active recipe), wrong token still gets a clean
+  401 — the change is invisible to legitimate callers.
+
+- **`lib/auth.ts`'s `databaseHooks.user.create.after` now logs a warning when
+  `redeemInviteCode` returns `false`** (the code was already consumed by the time this hook ran —
+  a concurrent-signup race, since the `before` hook's `isInviteCodeRedeemable` check and this
+  `after` hook's atomic redeem happen in two separate round trips with no lock held between them).
+  Reproduced the race for real: fired two truly concurrent sign-up requests sharing one invite
+  cookie against the dev server. **Both signups succeeded** (both passed the `before` check before
+  either had written `usedAt`), but only one redeem call actually claimed the code — confirmed the
+  warning logged for the loser, with its user id and the code, exactly as intended.
+
+  Worth being explicit about what this fix does and doesn't do, since the task scoped it as
+  logging-only ("no schema change needed"): it makes the double-use *visible*, it does not prevent
+  a second account from being created on one invite code. The `before` hook's check-then-later-
+  write pattern is inherently racy without an atomic check-and-claim at that step (e.g. a
+  conditional `UPDATE ... WHERE usedAt IS NULL RETURNING` moved earlier, before user creation,
+  with a rollback path if it fails) — that would be a real fix but is more invasive than what was
+  asked here. Flagging it in case closing this race for real is wanted as follow-up.
