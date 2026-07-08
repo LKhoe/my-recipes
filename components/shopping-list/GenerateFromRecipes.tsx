@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Check } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ export function GenerateFromRecipes({ recipes }: { recipes: { id: string; title:
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const [justGenerated, setJustGenerated] = useState(false);
 
   const filtered = recipes.filter((r) => r.title.toLowerCase().includes(query.toLowerCase()));
 
@@ -38,6 +40,8 @@ export function GenerateFromRecipes({ recipes }: { recipes: { id: string; title:
     setLoading(false);
     if (res.ok) {
       setSelected(new Set());
+      setJustGenerated(true);
+      setTimeout(() => setJustGenerated(false), 1200);
       router.refresh();
     } else {
       toast.error("Não foi possível gerar a lista de compras");
@@ -57,11 +61,16 @@ export function GenerateFromRecipes({ recipes }: { recipes: { id: string; title:
         {filtered.length === 0 && <p className="px-2 py-1.5 text-xs text-muted-foreground">Nenhuma receita encontrada</p>}
       </div>
       <Button type="button" onClick={handleGenerate} disabled={loading} className="self-start">
-        {loading
-          ? "Gerando…"
-          : selected.size === 0
-            ? "Gerar lista de compras"
-            : `Gerar a partir de ${selected.size} receita${selected.size === 1 ? "" : "s"}`}
+        <span key={justGenerated ? "done" : "idle"} className="flex items-center gap-1.5 animate-in zoom-in-50 fade-in-0 duration-200">
+          {justGenerated && <Check className="size-4" />}
+          {justGenerated
+            ? "Lista gerada!"
+            : loading
+              ? "Gerando…"
+              : selected.size === 0
+                ? "Gerar lista de compras"
+                : `Gerar a partir de ${selected.size} receita${selected.size === 1 ? "" : "s"}`}
+        </span>
       </Button>
     </div>
   );

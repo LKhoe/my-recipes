@@ -48,13 +48,16 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
           <YouTubeEmbed videoUrl={recipe.videoUrl} />
         </div>
       ) : heroImage ? (
-        <div className="relative mb-6 aspect-16/9 w-full overflow-hidden rounded-2xl bg-muted">
+        <div
+          className="relative mb-6 aspect-16/9 w-full overflow-hidden rounded-2xl bg-muted"
+          style={{ viewTransitionName: `recipe-hero-${recipe.id}` }}
+        >
           <Image
             src={imageSrc(heroImage.path)}
             alt={recipe.title}
             fill
             unoptimized
-            className="object-cover"
+            className="hero-parallax object-cover"
             priority
           />
         </div>

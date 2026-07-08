@@ -709,3 +709,176 @@ case.
   a longer wait resolved, confirming it was a timing artifact and not a rendering bug). All test
   data (recipe, image row, account, invite code) was deleted afterward — the recipe's cascading
   delete on its author's account was relied on for final cleanup, verified empty after.
+
+## 2026-07-08 — Feat: visual animations and transitions pass
+
+User request: make the app "look awesome" with animations. Presented 15 candidate animations
+(shared-element transitions, cook mode polish, micro-interactions, loading states) and the user
+chose "build all of them." Fourteen shipped; one (theme-toggle cross-fade) was scoped out — see
+below.
+
+- **No new npm dependency added.** Everything is built on native CSS (`tw-animate-css`, already a
+  dependency, supplies `animate-in`/`animate-out` + `fade-in-*`/`slide-in-from-*`/`zoom-in-*`
+  utilities used throughout) plus the browser's native View Transitions API and Web Animations
+  primitives (`element.animate`/pointer events for the lightbox drag). Considered adding `motion`
+  for the meal-plan "fly-in" and the photo lightbox, but both turned out to be achievable by hand
+  at the actual UI scale involved — not worth ~5kb + a new dependency for this app's size.
+
+- **Shared-element card→detail transition (`components/ViewTransitions.tsx`).** Next 16.2's
+  `experimental.viewTransition` flag requires React's experimental channel (confirmed this
+  project's `react@19.2.7` doesn't export a `ViewTransition` component — checked
+  `Object.keys(require("react"))` directly rather than assuming), which is too big a dependency
+  swap for this. Hand-rolled the well-known workaround instead: `ViewTransitionsProvider` wraps
+  `document.startViewTransition()` around a `router.push()`, resolving the transition's pending
+  promise via a `useEffect` on `usePathname()` (i.e. once the new route has actually committed) —
+  the same trick the `next-view-transitions` package uses internally, just inlined at ~40 lines
+  instead of adding the package. `TransitionLink` is a drop-in `next/link` replacement using it.
+  `RecipeCard`'s image wrapper and the recipe detail page's hero image both get a matching
+  `view-transition-name={`recipe-hero-${id}`}` so the photo morphs/expands between the two rather
+  than jump-cutting. Deliberately did *not* also tag the title/metadata block — the detail page's
+  header layout (title + edit button row) doesn't share the card footer's shape (tags + author),
+  and morphing mismatched-shape blocks looked worse than just letting them cross-fade individually.
+
+- **Cook mode step transitions (`CookModeClient.tsx`).** Steps slide in from the right on
+  "Próxima," from the left on "Voltar," via a `direction` state flag and a `key={currentStepIndex}`
+  remount. **Deliberately scoped the key to only the step-number/text wrapper, not all of `<main>`**
+  — `StepTimer` sits in the same `<main>` and owns its own countdown `useState`, and Phase 2's
+  decision above says a step's timer "keeps running even if you navigate to another step and back."
+  An earlier draft keyed the whole `<main>`, which would have force-remounted `StepTimer` (and
+  silently reset any running countdown) on every step change — caught this via code review before
+  it shipped, not by observing a live bug.
+
+- **Circular timer ring, `StepTimer`.** Replaced the plain mm:ss text with an SVG ring
+  (`stroke-dasharray`/`stroke-dashoffset`, animated via a plain CSS `transition` so it eases
+  between each 1-second tick rather than jumping) plus a `animate-pulse-glow` ring pulse when it
+  hits zero. Verified the depletion math for real: started a 30-minute timer on "Salmão ao molho de
+  alcaparras"'s step 2, waited ~2 minutes, and confirmed `stroke-dashoffset` (12.67) matched
+  `circumference × (1 − remaining/total)` exactly for a displayed 27:59 remaining.
+
+- **Found and fixed a real bug while verifying the rating-star pop animation
+  (`RatingStars.tsx`):** combining `fill-primary` (Tailwind's SVG fill-color utility) with
+  `fill-mode-both` (tw-animate-css's animation-fill-mode utility) in the same `cn()` call causes
+  `tailwind-merge` to silently drop `fill-primary` — it pattern-matches both onto the same `fill-*`
+  conflict group by prefix, with no awareness that `fill-mode-*` is a different (non-Tailwind-core)
+  utility family. Reproduced it directly (`twMerge("fill-primary text-primary", "fill-mode-both")`
+  → `"text-primary fill-mode-both"`) before touching any code. Filled stars would have rendered as
+  hollow outlines instead of solid terracotta. Fix: dropped `fill-mode-both` from `RatingStars` —
+  it was there to hold the pre-animation state during the staggered `animationDelay`, but the star
+  pop only animates `transform` (`zoom-in-50`), not `opacity`, so there's nothing to flash before
+  the delayed start and the fill-mode was unnecessary there in the first place. Verified fixed via
+  the live DOM (`fill-primary` present again) and a screenshot (4/5 stars solid terracotta).
+  Audited every other `fill-mode-both` use site in this pass (`RecipeCard`, `WeekCalendar` entry
+  chips) — neither combines it with a `fill-*` color utility, so this was isolated to
+  `RatingStars`.
+
+- **Ingredient scaling "roll-in" (`ScalableIngredients.tsx`, `CookModeClient.tsx`).** Simpler than
+  a literal per-digit odometer: each `<li>` is keyed by `` `${i}-${factor}` ``, so changing the
+  scale factor remounts every line and replays a small blur+translateY `animate-number-roll`
+  keyframe. Verified for real: doubling "Camarão Cremoso" to 2x correctly rendered "1.000 g
+  camarão" with the roll class present.
+
+- **Shopping list check-off (`ShoppingListClient.tsx`, `components/ui/checkbox.tsx`).** Replaced
+  lucide's `CheckIcon` with a custom `<polyline pathLength="16">` so the checkmark draws via
+  `stroke-dasharray`/`dashoffset` on mount (Radix's `Checkbox.Indicator` already only mounts when
+  checked, so no extra state needed — the draw animation just replays naturally every check).
+  Text no longer uses the `line-through` utility; instead a `scale-x-0 → scale-x-100` pseudo-line
+  sweeps across a nested `inline-block` span sized to just the text (not the full flex-1 row) so it
+  doesn't stretch into empty space. Added a `bg-success/5` settle tint on the row itself. All three
+  confirmed together via a real check: solid checkbox + sweep + green tint on "alecrim."
+
+- **Meal-plan "landing" animation, not a literal fly-in (`WeekCalendar.tsx`).** The original
+  suggestion was a cross-element fly from the picker into the calendar cell; rescoped after looking
+  at the actual layout — the "+ Adicionar" trigger already sits inside the same small cell the new
+  entry lands in, so a literal FLIP-animated fly would travel almost no distance and add
+  complexity for no visible payoff. Shipped a bounce-in (`zoom-in-75` + custom overshoot easing)
+  instead, which reads as "landing" regardless of source position. Relies on React's own
+  reconciliation for the "only new/moved entries animate" behavior — entries keep their `entry.id`
+  key, so `router.refresh()` doesn't remount unrelated existing chips, only ones that are new or
+  moved to a different cell (a real DOM move, since it's a different parent in the tree).
+
+- **Button feedback (`components/ui/button.tsx` + `SendToKitchenButton`/`GenerateFromRecipes`).**
+  `active:scale-[0.97]` added to the shared `buttonVariants` base class, so every button in the app
+  gets tactile press feedback for free. Added a transient checkmark-morph state (`justSent`/
+  `justGenerated`, auto-reverting after 1.2s) to the two buttons whose success is otherwise only
+  visible via a toast or a full-page data refresh. Deliberately **not** added to
+  `GenerateShoppingListButton` (the plan page's version) — it `router.push()`s away immediately on
+  success, so a 1.2s morph would never actually be seen.
+
+- **Import box "progress theater" (`ImportBox.tsx`).** Cross-fading status phrases
+  (`IMPORT_PHASES`, thresholds at 0/3/8/16/26s) plus an indeterminate sweeping progress bar,
+  replacing the bare spinner+seconds-elapsed counter. Purely cosmetic — doesn't reflect real
+  pipeline phase boundaries (the app has no server-sent progress events) — but timed to roughly
+  track the real JSON-LD → LLM-fallback → image-fetch pipeline described in the Phase 1 entries
+  above. Verified end-to-end with a real import against `https://example.com/` (no JSON-LD, so it
+  falls through to the manual-entry prefill path per existing behavior) — completed cleanly with
+  zero console errors, though fast enough in local dev that the phase-cycling couldn't be caught
+  mid-flight in a screenshot; confirmed correct by DOM/class inspection instead.
+
+- **Skeleton loading states.** New `app/(app)/recipes/loading.tsx` and
+  `app/(app)/recipes/[id]/loading.tsx`, both built on a new small `components/ui/skeleton.tsx`
+  (shadcn's usual pattern — a `bg-muted` block with a sweeping shimmer gradient). These are
+  Next.js App Router route-segment `loading.tsx` files, so they need no wiring — the framework
+  Suspense-boundaries the page automatically.
+
+- **Hero image parallax.** Implemented as a CSS scroll-driven animation
+  (`animation-timeline: scroll(root block)`) wrapped in `@supports (animation-timeline: scroll())`
+  — pure progressive enhancement, since Safari doesn't support scroll-driven animations as of this
+  writing; unsupported browsers just get a static (non-parallaxed) hero image rather than an error
+  or a JS scroll-listener fallback, which felt like the right amount of investment for a
+  decorative-only effect.
+
+- **Cook photo lightbox (`components/recipes/PhotoLightbox.tsx`).** Click-to-zoom uses the same
+  View Transitions primitive as the card→detail transition, but same-document this time (no
+  routing involved) — `document.startViewTransition(() => flushSync(update))`, the standard
+  React+native-View-Transitions pairing (`flushSync` forces the state update to commit
+  synchronously inside the transition callback, which native View Transitions require). The
+  `view-transition-name` is handed off between the grid thumbnail and the fullscreen `<img>`
+  (never both at once — verified this matters, since two elements sharing one
+  `view-transition-name` at the same DOM snapshot throws) via a ternary keyed on whether that
+  photo's lightbox is currently open. Swipe-to-dismiss is hand-rolled pointer-event dragging
+  (`translateY` follows the pointer, releases past a 120px threshold close, otherwise springs
+  back). **Verified for real** end-to-end: uploaded a real synthetic photo through the actual
+  `POST /api/recipes/:id/cook-photos` endpoint (not a mock), confirmed the lightbox opens with the
+  correct image and a dimmed backdrop, and confirmed the close button correctly tears it down. The
+  drag-to-dismiss gesture itself couldn't be mechanically verified through synthetic
+  `PointerEvent`s — `Element.setPointerCapture` requires a browser-trusted active pointer, which a
+  script-dispatched event doesn't provide, so this is a real limitation of headless verification
+  rather than a known app bug; the underlying logic (a threshold compared against `dragY` state) is
+  the same simple pattern already verified elsewhere in this pass.
+
+- **Empty-state bob.** A single `animate-gentle-bob` keyframe (subtle translateY + rotate loop)
+  applied to the `ChefHat`/`ShoppingCart` icons on the two empty-state screens.
+
+- **Skipped: theme-toggle cross-fade.** This was suggestion #14 from the original list (a circular
+  reveal when switching light/dark). Confirmed via the existing "App logo" decision above that
+  **no dark-mode toggle is wired into the app at all** — `next-themes` is an installed dependency
+  but never mounted as a provider in `app/layout.tsx`, so `.dark` is inert CSS with nothing to
+  trigger it. Building a cross-fade transition for a toggle that doesn't exist would mean building
+  the toggle itself first — a real feature, not an animation — so this was dropped rather than
+  silently scope-creeping into "also add dark mode." Flagging here in case dark mode is wanted as
+  its own future request.
+
+- **Verified for real, end-to-end, against the live dev server and its actual Postgres
+  container**: bootstrapped a real throwaway account through the actual invite+sign-up flow
+  (`npx tsx lib/db/create-invite.ts` → real `/signup` form), then drove the real browser against
+  the four pre-existing real recipes for every item above — card grid stagger, card→detail hero
+  morph, cook-mode step slide + timer ring math, rating star pop (which is how the `fill-mode-both`
+  bug above was actually caught), ingredient-scaling roll, shopping-list check-off, meal-plan
+  bounce-in, button success morphs, import theater, and the cook-photo lightbox (including a real
+  file upload). Zero console errors across all of it. All test data — the account, its rating,
+  shopping list, meal-plan entry, cook-photo row and its two on-disk `.webp` files, and the invite
+  code — was deleted afterward; re-queried the DB to confirm only the real pre-existing account and
+  data remained.
+
+- **Known pre-existing gap, not introduced or fixed by this pass**: `StepTimer` unmounts (losing
+  its countdown) whenever `currentStepIndex` moves to a step with no `durationMinutes`, because
+  `CookModeClient` only ever conditionally renders one `<StepTimer>` at the position of the
+  *current* step (`{step?.durationMinutes && <StepTimer .../>}`), not one per step with visibility
+  toggled. The Phase 2 decision above describes the intended design as the timer surviving
+  navigation to *any* other step and back, which is only actually true if every intervening step
+  also has a duration. Confirmed this by direct testing (started a 30-minute timer, stepped
+  backward through a no-duration step, stepped forward again — timer had reset to 30:00, not
+  resumed). Didn't fix it — the real fix (rendering every step's timer simultaneously, keyed by
+  step index, with only the current one visible) is an architecture change to a pre-existing
+  component, not something a "add animations" pass should quietly bundle in. Flagging it here so
+  it's a deliberate, visible gap rather than a silent one.

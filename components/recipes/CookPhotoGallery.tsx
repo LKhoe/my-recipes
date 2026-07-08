@@ -1,9 +1,21 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import Image from "next/image";
 import { X, ImagePlus, Loader2 } from "lucide-react";
 import { ALLOWED_MIME_TYPES, MAX_PHOTOS_PER_RECIPE } from "@/lib/image-constants";
+import { PhotoLightbox } from "@/components/recipes/PhotoLightbox";
+
+type DocumentWithViewTransition = Document & {
+  startViewTransition?: (callback: () => void) => void;
+};
+
+function withViewTransition(update: () => void) {
+  const doc = document as DocumentWithViewTransition;
+  if (doc.startViewTransition) doc.startViewTransition(() => flushSync(update));
+  else update();
+}
 
 export type CookPhoto = {
   id: string;
@@ -26,7 +38,9 @@ export function CookPhotoGallery({
   const [photos, setPhotos] = useState(initialPhotos);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lightboxId, setLightboxId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const lightboxPhoto = photos.find((p) => p.id === lightboxId) ?? null;
 
   const ownCount = photos.filter((p) => p.userId === currentUserId).length;
 
@@ -69,7 +83,21 @@ export function CookPhotoGallery({
       <div className="flex flex-wrap gap-3">
         {photos.map((photo) => (
           <div key={photo.id} className="group relative size-24 overflow-hidden rounded-lg border border-border">
-            <Image src={`/api/uploads/${photo.path}`} alt="" fill className="object-cover" unoptimized />
+            <button
+              type="button"
+              className="absolute inset-0 cursor-zoom-in"
+              onClick={() => withViewTransition(() => setLightboxId(photo.id))}
+              aria-label="Ampliar foto"
+            >
+              <Image
+                src={`/api/uploads/${photo.path}`}
+                alt=""
+                fill
+                className="object-cover transition-transform duration-200 group-hover:scale-105"
+                unoptimized
+                style={{ viewTransitionName: lightboxId === photo.id ? undefined : `cook-photo-${photo.id}` }}
+              />
+            </button>
             {photo.userId === currentUserId && (
               <button
                 type="button"
@@ -113,6 +141,14 @@ export function CookPhotoGallery({
         <p className="text-xs text-muted-foreground">Ninguém enviou fotos ainda. Que tal ser o primeiro?</p>
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}
+      {lightboxPhoto && (
+        <PhotoLightbox
+          photoId={lightboxPhoto.id}
+          photoPath={`/api/uploads/${lightboxPhoto.path}`}
+          alt=""
+          onClose={() => withViewTransition(() => setLightboxId(null))}
+        />
+      )}
     </div>
   );
 }

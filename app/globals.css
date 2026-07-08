@@ -140,3 +140,103 @@
     font-family: var(--font-display);
   }
 }
+
+/*
+ * Animation primitives shared across the app. `tw-animate-css` already covers generic
+ * enter/exit (fade-in, slide-in-from-*, zoom-in, blur-in) — these fill the gaps it doesn't:
+ * a skeleton shimmer, a timer "done" pulse, a hand-drawn checkmark, a rolling number swap, a
+ * gentle empty-state bob, and the browser View Transitions API's cross-page timing.
+ */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Applies to every ::view-transition-group regardless of its dynamic (per-recipe) name. */
+::view-transition-group(*) {
+  animation-duration: 0.42s;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes shimmer-sweep {
+  from { background-position: -150% 0; }
+  to { background-position: 150% 0; }
+}
+.animate-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    oklch(1 0 0 / 0.5) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-sweep 1.8s ease-in-out infinite;
+}
+.dark .animate-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    oklch(1 0 0 / 0.08) 50%,
+    transparent 70%
+  );
+}
+
+@keyframes pulse-glow-ring {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.58 0.15 35 / 0.35); }
+  50% { box-shadow: 0 0 0 10px oklch(0.58 0.15 35 / 0); }
+}
+.animate-pulse-glow {
+  animation: pulse-glow-ring 1.5s ease-out infinite;
+}
+
+@keyframes checkmark-draw {
+  from { stroke-dashoffset: 16; }
+  to { stroke-dashoffset: 0; }
+}
+.animate-checkmark-draw {
+  stroke-dasharray: 16;
+  animation: checkmark-draw 0.32s ease-out forwards;
+}
+
+@keyframes number-roll-in {
+  from { opacity: 0; transform: translateY(-35%); filter: blur(2px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+.animate-number-roll {
+  animation: number-roll-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes indeterminate-bar {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+.animate-indeterminate-bar {
+  animation: indeterminate-bar 1.2s ease-in-out infinite;
+}
+
+@keyframes gentle-bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-6px) rotate(-2deg); }
+}
+.animate-gentle-bob {
+  animation: gentle-bob 3s ease-in-out infinite;
+}
+
+/* Scroll-driven parallax — progressive enhancement only (Safari lacks animation-timeline as of
+   this writing), so the hero image just stays static there instead of erroring. */
+@supports (animation-timeline: scroll()) {
+  .hero-parallax {
+    animation: hero-parallax-move linear both;
+    animation-timeline: scroll(root block);
+    animation-range: 0 500px;
+  }
+  @keyframes hero-parallax-move {
+    from { transform: translateY(0) scale(1.06); }
+    to { transform: translateY(50px) scale(1.06); }
+  }
+}

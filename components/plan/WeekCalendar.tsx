@@ -115,6 +115,7 @@ export function WeekCalendar({
                       onDragEnd={() => setDragEntryId(null)}
                       className={cn(
                         "group flex items-center gap-1 rounded-md bg-secondary px-1.5 py-1 text-xs text-secondary-foreground",
+                        "animate-in zoom-in-75 fade-in-0 duration-500 fill-mode-both ease-[cubic-bezier(0.34,1.56,0.64,1)]",
                         dragEntryId === entry.id && "opacity-40",
                       )}
                     >

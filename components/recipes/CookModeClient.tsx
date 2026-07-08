@@ -35,40 +35,64 @@ function StepTimer({ stepIndex, durationMinutes }: { stepIndex: number; duration
   const minutes = Math.floor(remaining / 60);
   const seconds = remaining % 60;
   const done = remaining === 0;
+  const total = durationMinutes * 60;
+
+  const radius = 30;
+  const circumference = 2 * Math.PI * radius;
+  const progress = total > 0 ? remaining / total : 0;
+  const dashoffset = circumference * (1 - progress);
 
   return (
     <div
       className={cn(
-        "mt-4 flex items-center gap-3 rounded-xl border px-4 py-3",
+        "mt-4 flex flex-col items-center gap-3 rounded-xl border px-6 py-4",
         done ? "border-primary bg-primary/10" : "border-border bg-muted/50",
       )}
     >
-      <span className={cn("font-display text-2xl tabular-nums", done && "text-primary")}>
-        {minutes}:{seconds.toString().padStart(2, "0")}
-      </span>
-      {done ? (
-        <span className="text-sm font-medium text-primary">Tempo esgotado!</span>
-      ) : (
+      <div className={cn("relative flex size-24 items-center justify-center rounded-full", done && "animate-pulse-glow")}>
+        <svg viewBox="0 0 72 72" className="absolute inset-0 size-full -rotate-90">
+          <circle cx="36" cy="36" r={radius} fill="none" strokeWidth="5" className="stroke-border" />
+          <circle
+            cx="36"
+            cy="36"
+            r={radius}
+            fill="none"
+            strokeWidth="5"
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            strokeDashoffset={dashoffset}
+            className="stroke-primary transition-[stroke-dashoffset] duration-1000 ease-linear"
+          />
+        </svg>
+        <span className={cn("font-display text-xl tabular-nums", done && "text-primary")}>
+          {minutes}:{seconds.toString().padStart(2, "0")}
+        </span>
+      </div>
+      <div className="flex items-center gap-3">
+        {done ? (
+          <span className="text-sm font-medium text-primary">Tempo esgotado!</span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setRunning((r) => !r)}
+            className="flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
+          >
+            {running ? <Pause className="size-4" /> : <Play className="size-4" />}
+            {running ? "Pausar" : "Iniciar timer"}
+          </button>
+        )}
         <button
           type="button"
-          onClick={() => setRunning((r) => !r)}
-          className="flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
+          onClick={() => {
+            setRemaining(total);
+            setRunning(false);
+          }}
+          className="text-muted-foreground hover:text-foreground"
+          aria-label="Reiniciar timer"
         >
-          {running ? <Pause className="size-4" /> : <Play className="size-4" />}
-          {running ? "Pausar" : "Iniciar timer"}
+          <RotateCcw className="size-4" />
         </button>
-      )}
-      <button
-        type="button"
-        onClick={() => {
-          setRemaining(durationMinutes * 60);
-          setRunning(false);
-        }}
-        className="ml-auto text-muted-foreground hover:text-foreground"
-        aria-label="Reiniciar timer"
-      >
-        <RotateCcw className="size-4" />
-      </button>
+      </div>
     </div>
   );
 }
@@ -93,6 +117,7 @@ export function CookModeClient({
   const [currentStepIndex, setCurrentStepIndex] = useState(
     Math.min(initialStepIndex, Math.max(steps.length - 1, 0)),
   );
+  const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [checkedSteps, setCheckedSteps] = useState<Set<number>>(new Set());
   const [ingredientsOpen, setIngredientsOpen] = useState(false);
   const { factor, servings, setFactor, adjustServings } = useIngredientScaling(originalServings);
@@ -145,11 +170,17 @@ export function CookModeClient({
 
   function goNext() {
     setCheckedSteps((prev) => new Set(prev).add(currentStepIndex));
-    if (!isLastStep) setCurrentStepIndex((i) => i + 1);
+    if (!isLastStep) {
+      setDirection("forward");
+      setCurrentStepIndex((i) => i + 1);
+    }
   }
 
   function goBack() {
-    if (currentStepIndex > 0) setCurrentStepIndex((i) => i - 1);
+    if (currentStepIndex > 0) {
+      setDirection("back");
+      setCurrentStepIndex((i) => i - 1);
+    }
   }
 
   return (
@@ -184,17 +215,29 @@ export function CookModeClient({
           </div>
           <ul className="flex flex-col gap-1.5 text-sm">
             {ingredients.map((item, i) => (
-              <li key={i}>{formatIngredientLine(item, factor)}</li>
+              <li key={`${i}-${factor}`} className="animate-number-roll">
+                {formatIngredientLine(item, factor)}
+              </li>
             ))}
           </ul>
         </div>
       )}
 
       <main className="flex flex-1 flex-col items-center justify-center overflow-y-auto px-6 py-10 text-center">
-        <p className="text-sm font-medium text-muted-foreground">
-          Etapa {currentStepIndex + 1} de {steps.length}
-        </p>
-        <p className="mt-4 max-w-2xl font-display text-display-lg leading-snug text-foreground">{step?.text}</p>
+        {/* Keyed to the step index (not the whole <main>) so StepTimer below — which owns its own
+            countdown state per SPEC — never remounts and loses a running timer on navigation. */}
+        <div
+          key={currentStepIndex}
+          className={cn(
+            "flex flex-col items-center animate-in fade-in-0 duration-300",
+            direction === "forward" ? "slide-in-from-right-8" : "slide-in-from-left-8",
+          )}
+        >
+          <p className="text-sm font-medium text-muted-foreground">
+            Etapa {currentStepIndex + 1} de {steps.length}
+          </p>
+          <p className="mt-4 max-w-2xl font-display text-display-lg leading-snug text-foreground">{step?.text}</p>
+        </div>
 
         {step?.durationMinutes && <StepTimer stepIndex={currentStepIndex} durationMinutes={step.durationMinutes} />}
 

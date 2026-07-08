@@ -66,7 +66,7 @@ export default async function RecipesPage({
 
       {recipes.length === 0 ? (
         <div className="mt-16 flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border py-20 text-center">
-          <ChefHat className="size-10 text-muted-foreground" />
+          <ChefHat className="size-10 animate-gentle-bob text-muted-foreground" />
           <p className="font-display text-display-sm text-foreground">
             {hasFilters ? "Nenhuma receita corresponde aos filtros" : "A caixa de receitas está vazia"}
           </p>
@@ -83,8 +83,8 @@ export default async function RecipesPage({
         </div>
       ) : (
         <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {recipes.map((recipe) => (
-            <RecipeCard key={recipe.id} recipe={recipe} />
+          {recipes.map((recipe, index) => (
+            <RecipeCard key={recipe.id} recipe={recipe} index={index} />
           ))}
         </div>
       )}

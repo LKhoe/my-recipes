@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { ViewTransitionsProvider } from "@/components/ViewTransitions";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -27,8 +28,10 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <body className={`${fraunces.variable} ${inter.variable} antialiased`}>
-        {children}
-        <Toaster />
+        <ViewTransitionsProvider>
+          {children}
+          <Toaster />
+        </ViewTransitionsProvider>
       </body>
     </html>
   );

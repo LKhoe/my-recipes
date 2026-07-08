@@ -96,15 +96,30 @@ export function ShoppingListClient({ items }: { items: ShoppingListItemView[] })
               )}
               <ul className="flex flex-col gap-1.5">
                 {group.items.map((item) => (
-                  <li key={item.id} className="group flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-muted/50">
+                  <li
+                    key={item.id}
+                    className={cn(
+                      "group flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors duration-300 hover:bg-muted/50",
+                      item.checked && "bg-success/5",
+                    )}
+                  >
                     <Checkbox checked={item.checked} onCheckedChange={() => toggleChecked(item)} />
                     <span
                       className={cn(
-                        "flex-1 text-sm transition-all duration-300",
-                        item.checked && "text-muted-foreground line-through opacity-60",
+                        "flex-1 text-sm transition-colors duration-300",
+                        item.checked && "text-muted-foreground opacity-60",
                       )}
                     >
-                      {group.items.length > 1 ? formatLine(item) || "—" : [formatLine(item), item.name].filter(Boolean).join(" ")}
+                      <span className="relative inline-block">
+                        {group.items.length > 1 ? formatLine(item) || "—" : [formatLine(item), item.name].filter(Boolean).join(" ")}
+                        <span
+                          aria-hidden
+                          className={cn(
+                            "pointer-events-none absolute inset-x-0 top-1/2 h-px origin-left -translate-y-1/2 bg-current transition-transform duration-300 ease-out",
+                            item.checked ? "scale-x-100" : "scale-x-0",
+                          )}
+                        />
+                      </span>
                     </span>
                     <button
                       type="button"

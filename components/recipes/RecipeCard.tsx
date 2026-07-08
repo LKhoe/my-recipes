@@ -1,16 +1,20 @@
 import Image from "next/image";
-import Link from "next/link";
 import { ChefHat } from "lucide-react";
 import type { RecipeListItem } from "@/types";
 import { imageSrc } from "@/lib/image-url";
+import { TransitionLink } from "@/components/ViewTransitions";
 
-export function RecipeCard({ recipe }: { recipe: RecipeListItem }) {
+export function RecipeCard({ recipe, index = 0 }: { recipe: RecipeListItem; index?: number }) {
   return (
-    <Link
+    <TransitionLink
       href={`/recipes/${recipe.id}`}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition-shadow hover:shadow-soft-lg"
+      className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition-shadow animate-in fade-in-0 slide-in-from-bottom-3 duration-500 fill-mode-both hover:shadow-soft-lg"
+      style={{ animationDelay: `${Math.min(index, 12) * 40}ms` }}
     >
-      <div className="relative aspect-4/3 w-full overflow-hidden bg-muted">
+      <div
+        className="relative aspect-4/3 w-full overflow-hidden bg-muted"
+        style={{ viewTransitionName: `recipe-hero-${recipe.id}` }}
+      >
         {recipe.imagePath ? (
           <Image
             src={imageSrc(recipe.imagePath)}
@@ -41,6 +45,6 @@ export function RecipeCard({ recipe }: { recipe: RecipeListItem }) {
           )}
         </div>
       </div>
-    </Link>
+    </TransitionLink>
   );
 }

@@ -26,7 +26,7 @@ export default async function ShoppingListPage() {
           <ShoppingListClient items={list.items} />
         ) : (
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border py-16 text-center">
-            <ShoppingCart className="size-10 text-muted-foreground" />
+            <ShoppingCart className="size-10 animate-gentle-bob text-muted-foreground" />
             <p className="font-display text-display-sm text-foreground">Ainda não há lista de compras</p>
             <p className="max-w-sm text-sm text-muted-foreground">
               Gere uma a partir do planejamento de refeições, ou escolha receitas acima.
