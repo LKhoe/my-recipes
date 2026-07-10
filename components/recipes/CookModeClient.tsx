@@ -239,7 +239,17 @@ export function CookModeClient({
           <p className="mt-4 max-w-2xl font-display text-display-lg leading-snug text-foreground">{step?.text}</p>
         </div>
 
-        {step?.durationMinutes && <StepTimer stepIndex={currentStepIndex} durationMinutes={step.durationMinutes} />}
+        {/* One StepTimer per step with a duration, all mounted simultaneously and hidden via CSS
+            (not conditionally rendered) — this is what actually keeps a running countdown alive
+            when navigating to a different step and back, instead of remounting and resetting it. */}
+        {steps.map(
+          (s, i) =>
+            s.durationMinutes && (
+              <div key={i} className={i === currentStepIndex ? "contents" : "hidden"}>
+                <StepTimer stepIndex={i} durationMinutes={s.durationMinutes} />
+              </div>
+            ),
+        )}
 
         <button
           type="button"

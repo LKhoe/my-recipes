@@ -870,15 +870,12 @@ below.
   code — was deleted afterward; re-queried the DB to confirm only the real pre-existing account and
   data remained.
 
-- **Known pre-existing gap, not introduced or fixed by this pass**: `StepTimer` unmounts (losing
-  its countdown) whenever `currentStepIndex` moves to a step with no `durationMinutes`, because
-  `CookModeClient` only ever conditionally renders one `<StepTimer>` at the position of the
-  *current* step (`{step?.durationMinutes && <StepTimer .../>}`), not one per step with visibility
-  toggled. The Phase 2 decision above describes the intended design as the timer surviving
-  navigation to *any* other step and back, which is only actually true if every intervening step
-  also has a duration. Confirmed this by direct testing (started a 30-minute timer, stepped
-  backward through a no-duration step, stepped forward again — timer had reset to 30:00, not
-  resumed). Didn't fix it — the real fix (rendering every step's timer simultaneously, keyed by
-  step index, with only the current one visible) is an architecture change to a pre-existing
-  component, not something a "add animations" pass should quietly bundle in. Flagging it here so
-  it's a deliberate, visible gap rather than a silent one.
+- **Fixed: `StepTimer` losing its countdown on navigation.** Previously `CookModeClient` only ever
+  conditionally rendered one `<StepTimer>` at the position of the *current* step
+  (`{step?.durationMinutes && <StepTimer .../>}`), so stepping to a step with no `durationMinutes`
+  and back unmounted and remounted it, resetting the countdown — see the flagged gap this replaces.
+  Now every step with a `durationMinutes` gets its own permanently-mounted `<StepTimer>`, wrapped in
+  a `<div key={i}>` toggled between `contents` (current step, so it lays out as if it were a direct
+  child of `<main>`) and `hidden` (every other step) — visibility is CSS-only, so no `StepTimer`
+  instance ever unmounts and its `remaining`/`running` state (and the running `setInterval`) survive
+  navigating away and back, matching the Phase 2 decision's original intent.
