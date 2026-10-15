@@ -66,7 +66,15 @@ export function SignupForm() {
       return;
     }
 
-    await authClient.signIn.social({ provider: "google", callbackURL: "/" });
+    const { error: signInError } = await authClient.signIn.social({
+      provider: "google",
+      callbackURL: "/",
+    });
+
+    if (signInError) {
+      setError(signInError.message ?? "Não foi possível continuar com o Google.");
+      setLoading(null);
+    }
   }
 
   return (

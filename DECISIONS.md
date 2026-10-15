@@ -42,6 +42,15 @@ Choices made where SPEC.md was silent, with rationale. Newest last.
   it — acceptable for a private few-user household app where an admin can relay the link manually.
   Revisit with real SMTP if that becomes annoying.
 
+- **Google can link to an unverified email/password account** (`accountLinking.
+  requireLocalEmailVerified: false`). With no email provider, local accounts never get
+  `emailVerified`, and Better Auth's default (`true`) refused to link Google to them, so a member
+  who signed up with a password got `account_not_linked` when trying Google. The default guards
+  against pre-account takeover: someone registers a password account with another person's email,
+  and that person's later Google login lands in it. Here registering needs an invite code, so the
+  attacker would first have to get one from a member; accepted for a closed household circle.
+  Revisit if sign-up ever opens up or real email verification arrives.
+
 - **Category seed list (§4.2).** Fixed 12: Breakfast, Brunch, Appetizer, Main, Side, Salad, Soup,
   Dessert, Snack, Bread, Sauce & Condiment, Beverage. The spec only gave three examples.
 
@@ -944,3 +953,11 @@ below.
   whose binary expects libvips 8.18.3. Latent until sharp shipped a patch release. The runner now
   runs `npm ci --omit=dev` from the lockfile, so every copy agrees. Found while testing the S3
   switch in the real image; unrelated to S3 itself.
+
+- **Deploy follows LocalInfra's standard (`LocalInfra/DEPLOYING-APPS.md`).** `deploy.sh` is now
+  the shared `LocalInfra/templates/app/deploy.sh`, identical in every app: it reads the service,
+  container and image from `docker-compose.yml`, checks the external networks before the build,
+  and warns when `.env` still has local values. Its default no longer bumps, commits and pushes:
+  a plain `./deploy.sh` deploys the working tree, and `--release` does the bump + commit + push
+  (the old default) — deploying should never publish to GitHub as a side effect. First-time
+  setup uses `LocalInfra/scripts/provision-app.sh`, which writes the credentials into `.env`.

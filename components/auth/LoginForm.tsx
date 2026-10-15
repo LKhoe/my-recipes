@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +11,7 @@ import { Label } from "@/components/ui/label";
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/";
+  const redirect = safeRedirectPath(searchParams.get("redirect"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,8 +36,18 @@ export function LoginForm() {
   }
 
   async function handleGoogleLogin() {
+    setError(null);
     setLoading("google");
-    await authClient.signIn.social({ provider: "google", callbackURL: redirect });
+
+    const { error: signInError } = await authClient.signIn.social({
+      provider: "google",
+      callbackURL: redirect,
+    });
+
+    if (signInError) {
+      setError(signInError.message ?? "Não foi possível entrar com o Google.");
+      setLoading(null);
+    }
   }
 
   return (

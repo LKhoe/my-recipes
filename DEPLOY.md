@@ -1,5 +1,8 @@
 # Deployment
 
+my-recipes follows LocalInfra's standard app deploy, [DEPLOYING-APPS.md](../LocalInfra/DEPLOYING-APPS.md)
+(same steps, same `deploy.sh` as every app). This page has the my-recipes specifics.
+
 My Recipes runs on the Raspberry Pi 4 (umbrelOS 2), next to yarg-aggregator. It is deployed
 **from the Mac** through a Docker context named `umbrel`: `docker compose` runs on the Mac, but
 the image is built and the container runs on the Pi. Nothing is cloned on the Pi.
@@ -33,17 +36,18 @@ the image is built and the container runs on the Pi. Nothing is cloned on the Pi
 ## First deploy
 
 ```bash
-# 1. database role + database + photo bucket/key on LocalInfra (Redis isn't used)
-DOCKER_CONTEXT=umbrel ../LocalInfra/scripts/new-project.sh my_recipes --no-redis --s3
+# 1. database + role + photo bucket/key on LocalInfra (no Redis), written straight into .env
+#    (local-dev values in .env? move them to .env.local first)
+DOCKER_CONTEXT=umbrel ../LocalInfra/scripts/provision-app.sh my_recipes . --no-redis --s3
 
-# 2. .env — paste the printed DATABASE_URL / POSTGRES_* / S3_* block, then fill in the rest
-#    (public URL, BETTER_AUTH_SECRET, Google, OpenRouter, ALEXA_API_TOKEN; see .env.example)
-cp .env.example .env
+# 2. fill in what the script lists as still local/placeholder: PORT=3001,
+#    BETTER_AUTH_URL / NEXT_PUBLIC_APP_URL (public URL), BETTER_AUTH_SECRET, Google,
+#    OpenRouter, ALEXA_API_TOKEN (see .env.example)
 
 # 3. optional: move existing data in — BEFORE the first start (see below)
 
 # 4. build on the Pi and start (3–5 minutes)
-./deploy.sh --no-bump
+./deploy.sh
 
 # 5. first invite code, if the database is new
 DOCKER_CONTEXT=umbrel docker exec my-recipes node scripts/create-invite.mjs
@@ -96,14 +100,14 @@ instead (README, "Local development"). Every key is in `.env.example` and the RE
 ## Redeploy after changes
 
 ```bash
-./deploy.sh              # bump patch version, commit + push, build on the Pi, wait for healthy
-./deploy.sh --no-bump    # build what's in the working tree, no version commit
+./deploy.sh              # build the working tree on the Pi, restart, wait for healthy
+./deploy.sh --release    # first bump the patch version, commit and push
 ./deploy.sh --rollback   # restart the image that was live before the last deploy
 ```
 
-`deploy.sh` keeps the outgoing image as `my-recipes:previous` for `--rollback`. Only this
-container is rebuilt; LocalInfra keeps running. Set `DEPLOY_CONTEXT=...` to target another
-Docker context.
+`deploy.sh` is LocalInfra's shared one (`templates/app/deploy.sh`); it keeps the outgoing image
+as `my-recipes:previous` for `--rollback`. Only this container is rebuilt; LocalInfra keeps
+running. Set `DEPLOY_CONTEXT=...` to target another Docker context.
 
 ## Common commands
 
@@ -138,7 +142,7 @@ DOCKER_CONTEXT=umbrel docker exec localinfra-postgres pg_dump -U postgres -Fc my
 - **`Database connection failed after 30 attempts`**: LocalInfra isn't running, or the container
   isn't on `localinfra_postgres`.
 - **`password authentication failed for user "my_recipes"`**: `DATABASE_URL` doesn't match the
-  role; issue a new one with `new-project.sh my_recipes --no-redis --rotate`.
+  role; issue new credentials with `provision-app.sh my_recipes . --no-redis --s3 --rotate`.
 - **`Bind for 0.0.0.0:3001 failed: port is already allocated`**: pick another `PORT` in `.env`.
 - **`network umbrel_main_network declared as external, but could not be found`**: start any
   umbrelOS app once (the Cloudflare Tunnel app creates it), or remove that network from
@@ -149,6 +153,6 @@ DOCKER_CONTEXT=umbrel docker exec localinfra-postgres pg_dump -U postgres -Fc my
   public URL; rebuild after changing `NEXT_PUBLIC_APP_URL`.
 - **Health check fails / photos 404 after a deploy**: the S3 credentials in `.env` don't match
   the key (`docker exec localinfra-s3 garage key list`), or the container isn't on
-  `localinfra_s3`. Issue new ones with `new-project.sh my_recipes --no-postgres --no-redis --s3 --rotate`.
+  `localinfra_s3`. Issue new ones with `provision-app.sh my_recipes . --no-postgres --no-redis --s3 --rotate`.
 - **Out of memory on big photo uploads**: the container is limited to 768 MB
   (`deploy.resources.limits.memory`).

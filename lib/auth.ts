@@ -38,6 +38,10 @@ export const auth = betterAuth({
     accountLinking: {
       enabled: true,
       trustedProviders: ["google"],
+      // Emails are never verified here (no email provider), so the default `true` blocked every
+      // email/password member from linking Google ("account_not_linked"). Invite-only sign-up is
+      // the safeguard against pre-registering someone else's email. See DECISIONS.md.
+      requireLocalEmailVerified: false,
     },
   },
 

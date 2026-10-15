@@ -44,9 +44,9 @@ redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`). Email/password work
 
 | Variable | Required | Notes |
 |---|---|---|
-| `DATABASE_URL` | yes | from LocalInfra's `new-project.sh my_recipes --no-redis` |
+| `DATABASE_URL` | yes | written by LocalInfra's `provision-app.sh my_recipes . --no-redis --s3` |
 | `POSTGRES_HOST` / `POSTGRES_PORT` | docker | `localinfra-postgres` / `5432` — the entrypoint waits for it |
-| `S3_ENDPOINT` / `S3_REGION` / `S3_BUCKET` | yes | photo bucket, from `new-project.sh --s3` |
+| `S3_ENDPOINT` / `S3_REGION` / `S3_BUCKET` | yes | photo bucket, written by `provision-app.sh ... --s3` |
 | `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | yes | that bucket's key (read/write on it only) |
 | `BETTER_AUTH_SECRET` | yes | `openssl rand -base64 32` |
 | `BETTER_AUTH_URL` | yes | Base URL of the app (public URL on the Pi) |
@@ -70,11 +70,12 @@ redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`). Email/password work
 ## Deployment
 
 Runs on the Raspberry Pi (umbrelOS) next to yarg-aggregator, on LocalInfra's shared Postgres and
-S3 (Garage), deployed from the Mac through the `umbrel` Docker context. Full guide: **`DEPLOY.md`**.
+S3 (Garage), deployed from the Mac through the `umbrel` Docker context, following LocalInfra's
+standard app deploy (`../LocalInfra/DEPLOYING-APPS.md`). Specifics: **`DEPLOY.md`**.
 
 ```bash
-./deploy.sh              # bump version, push, build on the Pi, wait for healthy
-./deploy.sh --no-bump    # same, without the version commit
+./deploy.sh              # build on the Pi, restart, wait for healthy
+./deploy.sh --release    # first bump the version, commit and push
 ./deploy.sh --rollback   # restart the build that was live before the last deploy
 ```
 
