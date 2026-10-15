@@ -13,7 +13,7 @@ export default async function SettingsPage() {
       <section className="mt-8 rounded-2xl border border-border bg-card p-6">
         <h2 className="font-display text-display-sm text-foreground">Convidar alguém</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Gere um código de uso único para um novo membro do círculo se cadastrar.
+          Gere um link de convite de uso único para alguém novo entrar no círculo.
         </p>
         <div className="mt-4">
           <GenerateInviteButton />

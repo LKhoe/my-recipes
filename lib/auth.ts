@@ -6,6 +6,7 @@ import {
   isInviteCodeRedeemable,
   redeemInviteCode,
 } from "@/lib/invite";
+import { INVITE_REQUIRED_MESSAGE } from "@/lib/auth-errors";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -58,7 +59,7 @@ export const auth = betterAuth({
 
           if (!code || !(await isInviteCodeRedeemable(code))) {
             throw new APIError("BAD_REQUEST", {
-              message: "É necessário um código de convite válido para criar uma conta.",
+              message: INVITE_REQUIRED_MESSAGE,
               code: "INVALID_INVITE_CODE",
             });
           }

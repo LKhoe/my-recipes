@@ -4,18 +4,25 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { safeRedirectPath } from "@/lib/safe-redirect";
+import { googleErrorMessage, isInviteRequiredError } from "@/lib/auth-errors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { GoogleButton } from "@/components/auth/GoogleButton";
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = safeRedirectPath(searchParams.get("redirect"));
+  // Set by Better Auth when Google sign-in fails (errorCallbackURL below)
+  const googleError = searchParams.get("error");
+  const noAccount = isInviteRequiredError(googleError);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    googleError && !noAccount ? googleErrorMessage(googleError) : null,
+  );
   const [loading, setLoading] = useState<"email" | "google" | null>(null);
 
   async function handleLogin(e: React.FormEvent) {
@@ -42,6 +49,9 @@ export function LoginForm() {
     const { error: signInError } = await authClient.signIn.social({
       provider: "google",
       callbackURL: redirect,
+      // A Google account with no account here is a sign-up, which needs an invite: come back
+      // to this page (Better Auth appends ?error=…) instead of a generic error page.
+      errorCallbackURL: `/login?redirect=${encodeURIComponent(redirect)}`,
     });
 
     if (signInError) {
@@ -52,6 +62,26 @@ export function LoginForm() {
 
   return (
     <div className="flex flex-col gap-5">
+      {noAccount && (
+        <div role="alert" className="rounded-lg border border-accent bg-accent/30 p-3 text-sm">
+          <p className="font-medium text-foreground">Ainda não há uma conta com esse Google.</p>
+          <p className="mt-1 text-muted-foreground">
+            Para entrar pela primeira vez você precisa de um código de convite.{" "}
+            <a href="/signup" className="font-medium text-primary hover:underline">
+              Criar conta com convite
+            </a>
+          </p>
+        </div>
+      )}
+
+      <GoogleButton onClick={handleGoogleLogin} loading={loading === "google"} disabled={loading !== null} />
+
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <div className="h-px flex-1 bg-border" />
+        ou com e-mail
+        <div className="h-px flex-1 bg-border" />
+      </div>
+
       <form onSubmit={handleLogin} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="email">E-mail</Label>
@@ -59,6 +89,7 @@ export function LoginForm() {
             id="email"
             type="email"
             required
+            autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
@@ -74,6 +105,7 @@ export function LoginForm() {
             id="password"
             type="password"
             required
+            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
@@ -84,25 +116,10 @@ export function LoginForm() {
         </Button>
       </form>
 
-      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-        <div className="h-px flex-1 bg-border" />
-        ou
-        <div className="h-px flex-1 bg-border" />
-      </div>
-
-      <Button
-        type="button"
-        variant="outline"
-        disabled={loading !== null}
-        onClick={handleGoogleLogin}
-      >
-        {loading === "google" ? "Redirecionando…" : "Continuar com Google"}
-      </Button>
-
       <p className="text-center text-sm text-muted-foreground">
-        Novo por aqui?{" "}
+        Recebeu um convite?{" "}
         <a href="/signup" className="font-medium text-primary hover:underline">
-          Você vai precisar de um código de convite
+          Criar sua conta
         </a>
       </p>
     </div>
