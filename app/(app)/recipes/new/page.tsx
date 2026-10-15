@@ -1,7 +1,9 @@
+import { requireSession } from "@/lib/session";
 import { listCategories } from "@/lib/services/category";
 import { NewRecipeClient } from "@/components/recipes/NewRecipeClient";
 
 export default async function NewRecipePage() {
+  await requireSession("/recipes/new");
   const categories = await listCategories();
 
   return (

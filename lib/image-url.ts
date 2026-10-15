@@ -14,3 +14,16 @@ export function isExternalImageUrl(value: string): boolean {
 export function imageSrc(path: string): string {
   return isExternalImageUrl(path) ? path : `/api/uploads/${path}`;
 }
+
+/** `recipes/abc/uuid.webp` → `recipes/abc/uuid-thumb.webp`, the small copy stored next to every upload. */
+export function thumbnailPath(path: string): string {
+  return path.replace(/(\.[^./]+)$/, "-thumb$1");
+}
+
+/**
+ * Like `imageSrc`, but for grids/cards: the thumbnail (≤ 800px, see `THUMBNAIL_DIMENSION` in
+ * lib/services/image.ts) instead of the 1600px original. External URLs have no thumbnail.
+ */
+export function thumbnailSrc(path: string): string {
+  return isExternalImageUrl(path) ? path : `/api/uploads/${thumbnailPath(path)}`;
+}

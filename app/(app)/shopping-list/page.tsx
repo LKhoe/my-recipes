@@ -1,5 +1,4 @@
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session";
 import { getLatestShoppingList } from "@/lib/services/shopping-list";
 import { listRecipes } from "@/lib/services/recipe";
 import { ShoppingListClient } from "@/components/shopping-list/ShoppingListClient";
@@ -7,9 +6,9 @@ import { GenerateFromRecipes } from "@/components/shopping-list/GenerateFromReci
 import { ShoppingCart } from "lucide-react";
 
 export default async function ShoppingListPage() {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await requireSession("/shopping-list");
   const [list, recipes] = await Promise.all([
-    session?.user ? getLatestShoppingList(session.user.id) : Promise.resolve(null),
+    getLatestShoppingList(session.user.id),
     listRecipes(),
   ]);
 

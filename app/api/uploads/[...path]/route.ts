@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
-import fs from "fs/promises";
 import { auth } from "@/lib/auth";
-import { resolveUploadPath } from "@/lib/services/image";
+import { getObjectStream, isSafeObjectKey } from "@/lib/services/storage";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".webp": "image/webp",
@@ -11,6 +10,8 @@ const CONTENT_TYPES: Record<string, string> = {
   ".png": "image/png",
 };
 
+// Photos live in a private S3 bucket (lib/services/storage.ts); this route is the only way to
+// reach them, so they stay behind the circle's login.
 export async function GET(_request: Request, { params }: { params: Promise<{ path: string[] }> }) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
@@ -18,26 +19,22 @@ export async function GET(_request: Request, { params }: { params: Promise<{ pat
   }
 
   const { path: segments } = await params;
-  const absolutePath = resolveUploadPath(segments);
-  if (!absolutePath) {
+  const key = segments.join("/");
+  const contentType = CONTENT_TYPES[key.slice(key.lastIndexOf("."))];
+  if (!isSafeObjectKey(key) || !contentType) {
     return NextResponse.json({ error: "Não encontrado" }, { status: 404 });
   }
 
-  const ext = absolutePath.slice(absolutePath.lastIndexOf("."));
-  const contentType = CONTENT_TYPES[ext];
-  if (!contentType) {
+  const object = await getObjectStream(key);
+  if (!object) {
     return NextResponse.json({ error: "Não encontrado" }, { status: 404 });
   }
 
-  try {
-    const data = await fs.readFile(absolutePath);
-    return new NextResponse(new Uint8Array(data), {
-      headers: {
-        "Content-Type": contentType,
-        "Cache-Control": "private, max-age=31536000, immutable",
-      },
-    });
-  } catch {
-    return NextResponse.json({ error: "Não encontrado" }, { status: 404 });
-  }
+  return new NextResponse(object.body, {
+    headers: {
+      "Content-Type": contentType,
+      ...(object.contentLength !== undefined && { "Content-Length": String(object.contentLength) }),
+      "Cache-Control": "private, max-age=31536000, immutable",
+    },
+  });
 }

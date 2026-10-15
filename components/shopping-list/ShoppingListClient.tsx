@@ -124,7 +124,7 @@ export function ShoppingListClient({ items }: { items: ShoppingListItemView[] })
                     <button
                       type="button"
                       onClick={() => removeItem(item.id)}
-                      className="opacity-0 text-muted-foreground group-hover:opacity-100 hover:text-destructive"
+                      className="-my-1.5 rounded-md p-1.5 text-muted-foreground transition-opacity hover:text-destructive focus-visible:opacity-100 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
                       aria-label="Remover item"
                     >
                       <X className="size-4" />

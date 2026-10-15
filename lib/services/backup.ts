@@ -1,15 +1,14 @@
 import { spawn } from "child_process";
-import fs from "fs";
-import fsp from "fs/promises";
-import path from "path";
+import { Readable } from "stream";
+import type { ReadableStream as NodeWebReadableStream } from "stream/web";
 import { createGzip } from "zlib";
 import tar from "tar-stream";
-import { UPLOADS_DIR } from "@/lib/services/image";
+import { getObjectStream, listObjects } from "@/lib/services/storage";
 
-// SPEC §4.9: `pg_dump -Fc` piped, together with the uploads directory, into one tar.gz. Tar
+// SPEC §4.9: `pg_dump -Fc` piped, together with every photo in the bucket, into one tar.gz. Tar
 // entries need a known size up front, which a live process's stdout doesn't have — so the dump
-// (typically small for this app's data) is buffered in memory once, while each upload file
-// streams straight off disk (its size comes cheaply from `stat`, no buffering needed). Neither
+// (typically small for this app's data) is buffered in memory once, while each photo streams
+// straight out of S3 (its size comes from the bucket listing, no buffering needed). Neither
 // touches a temp file on disk, matching the spec's "no temp files" intent.
 function collectPgDump(): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -33,32 +32,13 @@ function collectPgDump(): Promise<Buffer> {
   });
 }
 
-async function* walkFiles(dir: string, base: string): AsyncGenerator<{ relativePath: string; absolutePath: string; size: number }> {
-  let entries: fs.Dirent[];
-  try {
-    entries = await fsp.readdir(dir, { withFileTypes: true });
-  } catch {
-    return; // uploads/ may not exist yet on a fresh install
-  }
-
-  for (const entry of entries) {
-    const absolutePath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      yield* walkFiles(absolutePath, base);
-    } else if (entry.isFile()) {
-      const stat = await fsp.stat(absolutePath);
-      yield { relativePath: path.relative(base, absolutePath), absolutePath, size: stat.size };
-    }
-  }
-}
-
 function writeEntry(pack: tar.Pack, header: tar.Headers, content: Buffer): Promise<void> {
   return new Promise((resolve, reject) => {
     pack.entry(header, content, (err) => (err ? reject(err) : resolve()));
   });
 }
 
-function streamEntry(pack: tar.Pack, header: tar.Headers, sourcePath: string): Promise<void> {
+function streamEntry(pack: tar.Pack, header: tar.Headers, source: Readable): Promise<void> {
   return new Promise((resolve, reject) => {
     const entry = pack.entry(header, (err) => {
       if (err) reject(err);
@@ -67,16 +47,15 @@ function streamEntry(pack: tar.Pack, header: tar.Headers, sourcePath: string): P
       reject(new Error(`Could not create tar entry for ${header.name}`));
       return;
     }
-    const readStream = fs.createReadStream(sourcePath);
-    readStream.on("error", reject);
+    source.on("error", reject);
     entry.on("error", reject);
     entry.on("finish", resolve);
-    readStream.pipe(entry);
+    source.pipe(entry);
   });
 }
 
 /**
- * Returns a gzip-compressed tar stream: `db.dump` at the root, plus everything under `uploads/`.
+ * Returns a gzip-compressed tar stream: `db.dump` at the root, plus every photo under `uploads/`.
  *
  * `pack`'s `error` is forwarded to `gzip` explicitly — plain `.pipe()` does not propagate `error`
  * events from source to destination, so a failed `pg_dump` would otherwise leave `gzip` (and the
@@ -94,8 +73,12 @@ export function createBackupStream(): NodeJS.ReadableStream {
       const dump = await collectPgDump();
       await writeEntry(pack, { name: "db.dump", size: dump.length }, dump);
 
-      for await (const file of walkFiles(UPLOADS_DIR, UPLOADS_DIR)) {
-        await streamEntry(pack, { name: `uploads/${file.relativePath}`, size: file.size }, file.absolutePath);
+      // Kept under `uploads/` so an archive restores the same way it did when photos were on disk.
+      for await (const object of listObjects()) {
+        const stored = await getObjectStream(object.key);
+        if (!stored) continue; // deleted between the listing and now
+        const source = Readable.fromWeb(stored.body as NodeWebReadableStream);
+        await streamEntry(pack, { name: `uploads/${object.key}`, size: object.size }, source);
       }
 
       pack.finalize();

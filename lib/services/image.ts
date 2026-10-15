@@ -1,33 +1,21 @@
 import { randomUUID } from "crypto";
 import path from "path";
-import fs from "fs/promises";
 import sharp from "sharp";
 import heicConvert from "heic-convert";
 import { ALLOWED_MIME_TYPES, MAX_UPLOAD_BYTES } from "@/lib/image-constants";
-import { isExternalImageUrl } from "@/lib/image-url";
+import { isExternalImageUrl, thumbnailPath } from "@/lib/image-url";
+import { deleteObjects, putObject } from "@/lib/services/storage";
 
 const MAX_DIMENSION = 1600;
-const THUMBNAIL_DIMENSION = 400;
-
-export const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+// Sized for a recipe card at 2x DPR (cards are ≤ ~400 CSS px wide). Was 400 until the cards
+// started using thumbnails — scripts/upload-photos-to-s3.mjs upgrades older ones while moving
+// them into the bucket. Keep in sync with that script.
+const THUMBNAIL_DIMENSION = 800;
 
 export class ImageValidationError extends Error {}
 
-function thumbnailPathFor(relativePath: string): string {
-  const ext = path.extname(relativePath);
-  return relativePath.slice(0, -ext.length) + "-thumb" + ext;
-}
-
-/**
- * @param relativeDir Where under `uploads/` to store this image, e.g. `recipes/{recipeId}` for a
- *   recipe's own cover photos or `recipes/{recipeId}/cooked` for a circle member's "I made this"
- *   photo — kept in a distinct subfolder so the two collections don't mix.
- */
-export async function processAndStoreImage(
-  relativeDir: string,
-  buffer: Buffer,
-  mimeType: string,
-): Promise<{ path: string }> {
+/** Validates an upload and renders the stored webp + its thumbnail. No storage involved. */
+export async function processImage(buffer: Buffer, mimeType: string): Promise<{ full: Buffer; thumb: Buffer }> {
   if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
     throw new ImageValidationError(`Tipo de imagem não suportado: ${mimeType}`);
   }
@@ -51,46 +39,49 @@ export async function processAndStoreImage(
     }
   }
 
-  const relativePath = path.posix.join(relativeDir, `${randomUUID()}.webp`);
-  const relativeThumbPath = thumbnailPathFor(relativePath);
-  const absolutePath = path.join(UPLOADS_DIR, relativePath);
-  const absoluteThumbPath = path.join(UPLOADS_DIR, relativeThumbPath);
-
-  await fs.mkdir(path.dirname(absolutePath), { recursive: true });
-
   const image = sharp(sourceBuffer, { failOn: "none" }).rotate();
 
-  await image
-    .clone()
-    .resize({ width: MAX_DIMENSION, height: MAX_DIMENSION, fit: "inside", withoutEnlargement: true })
-    .webp({ quality: 82 })
-    .toFile(absolutePath);
+  const [full, thumb] = await Promise.all([
+    image
+      .clone()
+      .resize({ width: MAX_DIMENSION, height: MAX_DIMENSION, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toBuffer(),
+    image
+      .clone()
+      .resize({ width: THUMBNAIL_DIMENSION, height: THUMBNAIL_DIMENSION, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 78 })
+      .toBuffer(),
+  ]);
 
-  await image
-    .clone()
-    .resize({ width: THUMBNAIL_DIMENSION, height: THUMBNAIL_DIMENSION, fit: "inside", withoutEnlargement: true })
-    .webp({ quality: 78 })
-    .toFile(absoluteThumbPath);
+  return { full, thumb };
+}
+
+/**
+ * @param relativeDir Key prefix in the photo bucket, e.g. `recipes/{recipeId}` for a recipe's
+ *   own cover photos or `recipes/{recipeId}/cooked` for a circle member's "I made this" photo —
+ *   kept in a distinct prefix so the two collections don't mix.
+ */
+export async function processAndStoreImage(
+  relativeDir: string,
+  buffer: Buffer,
+  mimeType: string,
+): Promise<{ path: string }> {
+  const { full, thumb } = await processImage(buffer, mimeType);
+
+  const relativePath = path.posix.join(relativeDir, `${randomUUID()}.webp`);
+  await Promise.all([
+    putObject(relativePath, full, "image/webp"),
+    putObject(thumbnailPath(relativePath), thumb, "image/webp"),
+  ]);
 
   return { path: relativePath };
 }
 
 export async function deleteImageFiles(relativePath: string): Promise<void> {
   // A YouTube-thumbnail image (see processAndStoreImage's callers) stores the remote URL
-  // directly rather than a local file — nothing to remove from disk.
+  // directly rather than an object of ours — nothing to remove.
   if (isExternalImageUrl(relativePath)) return;
 
-  const absolutePath = path.join(UPLOADS_DIR, relativePath);
-  const absoluteThumbPath = path.join(UPLOADS_DIR, thumbnailPathFor(relativePath));
-  await Promise.all([
-    fs.rm(absolutePath, { force: true }),
-    fs.rm(absoluteThumbPath, { force: true }),
-  ]);
-}
-
-export function resolveUploadPath(segments: string[]): string | null {
-  const relativePath = path.posix.join(...segments);
-  const absolutePath = path.join(UPLOADS_DIR, relativePath);
-  if (!absolutePath.startsWith(UPLOADS_DIR + path.sep)) return null; // path traversal guard
-  return absolutePath;
+  await deleteObjects([relativePath, thumbnailPath(relativePath)]);
 }

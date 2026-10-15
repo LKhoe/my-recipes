@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { ViewTransitionsProvider } from "@/components/ViewTransitions";
@@ -20,6 +20,12 @@ export const metadata: Metadata = {
   description: "Uma coleção de receitas privada para a família.",
 };
 
+// viewport-fit=cover makes env(safe-area-inset-bottom) non-zero on iPhones, so the mobile tab bar
+// clears the home indicator.
+export const viewport: Viewport = {
+  viewportFit: "cover",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -30,7 +36,8 @@ export default function RootLayout({
       <body className={`${fraunces.variable} ${inter.variable} antialiased`}>
         <ViewTransitionsProvider>
           {children}
-          <Toaster />
+          {/* Clear the mobile tab bar (components/AppNav.tsx) */}
+          <Toaster mobileOffset={{ bottom: "calc(4.5rem + env(safe-area-inset-bottom))" }} />
         </ViewTransitionsProvider>
       </body>
     </html>

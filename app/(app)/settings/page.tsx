@@ -1,8 +1,11 @@
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GenerateInviteButton } from "@/components/settings/GenerateInviteButton";
+import { requireSession } from "@/lib/session";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  await requireSession("/settings");
+
   return (
     <div className="mx-auto max-w-xl px-4 py-10">
       <h1 className="font-display text-display-lg text-foreground">Configurações</h1>

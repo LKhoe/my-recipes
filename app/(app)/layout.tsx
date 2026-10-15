@@ -1,33 +1,20 @@
 import Link from "next/link";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth";
+import { getSession } from "@/lib/session";
 import { UserMenu } from "@/components/auth/UserMenu";
 import { Logo } from "@/components/Logo";
+import { DesktopNav, MobileTabBar } from "@/components/AppNav";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getSession();
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="flex items-center justify-between border-b border-border px-6 py-4">
+    <div className="min-h-screen bg-background pb-[calc(4rem+env(safe-area-inset-bottom))] sm:pb-0">
+      <header className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex items-center gap-6">
           <Link href="/recipes">
             <Logo />
           </Link>
-          <nav className="hidden items-center gap-4 text-sm text-muted-foreground sm:flex">
-            <Link href="/recipes" className="hover:text-foreground">
-              Receitas
-            </Link>
-            <Link href="/plan" className="hover:text-foreground">
-              Planejamento
-            </Link>
-            <Link href="/shopping-list" className="hover:text-foreground">
-              Lista de Compras
-            </Link>
-            <Link href="/settings" className="hover:text-foreground">
-              Configurações
-            </Link>
-          </nav>
+          <DesktopNav />
         </div>
         {session?.user && (
           <UserMenu
@@ -38,6 +25,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         )}
       </header>
       {children}
+      <MobileTabBar />
     </div>
   );
 }

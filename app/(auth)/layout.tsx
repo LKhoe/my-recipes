@@ -1,6 +1,11 @@
+import { redirect } from "next/navigation";
 import { RecipeBowlMark } from "@/components/icons/RecipeBowlMark";
+import { getSession } from "@/lib/session";
 
-export default function AuthLayout({ children }: { children: React.ReactNode }) {
+export default async function AuthLayout({ children }: { children: React.ReactNode }) {
+  const session = await getSession();
+  if (session?.user) redirect("/recipes");
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4 py-12">
       <div className="w-full max-w-sm">

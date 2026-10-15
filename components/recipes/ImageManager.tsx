@@ -5,7 +5,7 @@ import Image from "next/image";
 import { Label } from "@/components/ui/label";
 import { X, ImagePlus, Loader2 } from "lucide-react";
 import { ALLOWED_MIME_TYPES, MAX_PHOTOS_PER_RECIPE } from "@/lib/image-constants";
-import { imageSrc } from "@/lib/image-url";
+import { thumbnailSrc } from "@/lib/image-url";
 
 export type UploadedImage = { id: string; path: string };
 
@@ -72,11 +72,11 @@ export function ImageManager({
       <div className="flex flex-wrap gap-3">
         {images.map((img) => (
           <div key={img.id} className="group relative size-24 overflow-hidden rounded-lg border border-border">
-            <Image src={imageSrc(img.path)} alt="" fill className="object-cover" unoptimized />
+            <Image src={thumbnailSrc(img.path)} alt="" fill className="object-cover" unoptimized />
             <button
               type="button"
               onClick={() => handleRemoveUploaded(img.id)}
-              className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+              className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white transition-opacity focus-visible:opacity-100 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
             >
               <X className="size-3" />
             </button>
@@ -89,7 +89,7 @@ export function ImageManager({
             <button
               type="button"
               onClick={() => onPendingFilesChange(pendingFiles.filter((_, i) => i !== index))}
-              className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+              className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white transition-opacity focus-visible:opacity-100 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
             >
               <X className="size-3" />
             </button>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { requireSession } from "@/lib/session";
 import { listMealPlanEntries } from "@/lib/services/meal-plan";
 import { listRecipes } from "@/lib/services/recipe";
 import { addDays, formatDateISO, getWeekDays, getWeekStart } from "@/lib/date-utils";
@@ -12,6 +13,7 @@ export default async function PlanPage({
 }: {
   searchParams: Promise<{ week?: string }>;
 }) {
+  await requireSession("/plan");
   const { week } = await searchParams;
   const anchor = week && /^\d{4}-\d{2}-\d{2}$/.test(week) ? new Date(`${week}T00:00:00`) : new Date();
   const weekStart = getWeekStart(anchor);
@@ -50,7 +52,7 @@ export default async function PlanPage({
       </div>
 
       <div className="mt-8">
-        <WeekCalendar days={weekDays} entries={entries} recipes={recipes.map((r) => ({ id: r.id, title: r.title }))} />
+        <WeekCalendar days={weekDays} today={formatDateISO(new Date())} entries={entries} recipes={recipes.map((r) => ({ id: r.id, title: r.title }))} />
       </div>
     </div>
   );

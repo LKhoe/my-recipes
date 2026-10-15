@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireSession } from "@/lib/session";
 import { listRecipes } from "@/lib/services/recipe";
 import { listCategories } from "@/lib/services/category";
 import { RecipeCard } from "@/components/recipes/RecipeCard";
@@ -11,6 +12,7 @@ export default async function RecipesPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  await requireSession("/recipes");
   const params = await searchParams;
   const [recipes, categories] = await Promise.all([
     listRecipes({

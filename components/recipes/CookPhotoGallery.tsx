@@ -6,6 +6,7 @@ import Image from "next/image";
 import { X, ImagePlus, Loader2 } from "lucide-react";
 import { ALLOWED_MIME_TYPES, MAX_PHOTOS_PER_RECIPE } from "@/lib/image-constants";
 import { PhotoLightbox } from "@/components/recipes/PhotoLightbox";
+import { thumbnailSrc } from "@/lib/image-url";
 
 type DocumentWithViewTransition = Document & {
   startViewTransition?: (callback: () => void) => void;
@@ -90,7 +91,7 @@ export function CookPhotoGallery({
               aria-label="Ampliar foto"
             >
               <Image
-                src={`/api/uploads/${photo.path}`}
+                src={thumbnailSrc(photo.path)}
                 alt=""
                 fill
                 className="object-cover transition-transform duration-200 group-hover:scale-105"
@@ -102,7 +103,7 @@ export function CookPhotoGallery({
               <button
                 type="button"
                 onClick={() => handleDelete(photo.id)}
-                className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white transition-opacity focus-visible:opacity-100 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
               >
                 <X className="size-3" />
               </button>

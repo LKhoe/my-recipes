@@ -34,7 +34,7 @@ Choices made where SPEC.md was silent, with rationale. Newest last.
 
 - **`InviteCode.createdByUserId` is nullable.** SPEC §5 doesn't say NOT NULL, and the first invite
   code has no member to have created it (chicken-and-egg before any user exists). Bootstrap it via
-  `npx tsx lib/db/create-invite.ts`; every invite minted through the app
+  `npx tsx lib/db/create-invite.ts` (since replaced by `npm run db:invite`, see "Deploy on LocalInfra"); every invite minted through the app
   (`POST /api/invite/generate`, authenticated) sets a real creator.
 
 - **Password reset email delivery.** SPEC §2 doesn't list a transactional email provider anywhere
@@ -879,3 +879,68 @@ below.
   child of `<main>`) and `hidden` (every other step) — visibility is CSS-only, so no `StepTimer`
   instance ever unmounts and its `remaining`/`running` state (and the running `setInterval`) survive
   navigating away and back, matching the Phase 2 decision's original intent.
+
+## Deploy on LocalInfra (Raspberry Pi)
+
+- **Postgres moves to LocalInfra.** The app no longer ships its own `postgres` service: it joins the
+  external `localinfra_postgres` network and uses its own role/database (`my_recipes`, from
+  `LocalInfra/scripts/new-project.sh my_recipes --no-redis`), matching how yarg-aggregator runs on
+  the same Pi. The project name is `my_recipes` because `new-project.sh` only accepts
+  `[a-z][a-z0-9_]`. No Redis: §2/§8's "no job queue" still holds.
+
+- **`pg_dump` client is now v17** (`PG_MAJOR` build arg), replacing the Phase 0 "Postgres 16"
+  decision — LocalInfra runs Postgres 17, and an older `pg_dump` refuses to dump a newer server.
+  `unaccent` (migration 0002) needs no change: it's a trusted extension since PG13, so the
+  database owner can create it without superuser.
+
+- **Host port 3001, image tagged `my-recipes:latest`.** yarg owns 3000 on the Pi. The fixed image
+  tag lets `deploy.sh` keep the outgoing build as `my-recipes:previous`, so `--rollback` restores
+  the actual previous build instead of restarting the current one (the old rollback only
+  recreated the container from the same image).
+
+- **`deploy.sh` deploys through the `umbrel` Docker context** instead of SSH + `git pull` on a
+  clone, the same model LocalInfra and yarg use; the `DEPLOY_HOST/USER/PORT` variables are gone.
+
+- **`TZ=America/Sao_Paulo` in the container.** The meal plan computes "this week" on the server
+  with `new Date()`; in a UTC container, Sunday after 21:00 BRT already showed next week. Node
+  ships full ICU, so `TZ` works on Alpine without `tzdata`.
+
+- **`.env` = Pi, `.env.local` = local dev** (yarg's convention). `db:migrate`, `db:studio`,
+  `db:seed` and `db:invite` run through `node --env-file-if-exists=.env.local` so they can't
+  silently target the Pi's `DATABASE_URL`; drizzle-kit's own `.env` loading never overrides a
+  variable that is already set.
+
+- **First invite on the Pi: `scripts/create-invite.mjs`.** `lib/db/create-invite.ts` needed tsx,
+  which isn't in the production image; the `.mjs` replaces it for both local dev
+  (`npm run db:invite`) and the container.
+
+- **Photos move to S3 (Garage on LocalInfra), superseding SPEC §4.8's "no external object
+  storage" and the uploads volume.** Garage was picked over SeaweedFS, RustFS and a MinIO fork
+  (MinIO's community edition was archived in 2026): lightest footprint on the Pi, official arm64
+  releases, and per-app isolation that matches LocalInfra's model — one key per project, granted
+  read/write on its own bucket only (verified: AccessDenied on other buckets, can't create or
+  delete buckets, lists only its own). Still self-hosted, so §4.8's intent (no third-party
+  cloud) holds. The bucket is private: `/api/uploads/...` keeps streaming photos to signed-in
+  users, now from S3. Object keys are the same relative paths the DB already stored, so moving
+  existing photos needed no migration — `scripts/upload-photos-to-s3.mjs` copies a folder in,
+  re-rendering 400px thumbnails at 800px on the way (replacing the boot-time
+  `regenerate-thumbnails.mjs`, which only made sense on a local disk).
+
+- **No separate backup for photos.** Garage stores them on the Pi's external RAID 1 drive; the
+  user chose RAID 1 as enough (it covers a dead disk, not deletions or losing the Pi). The in-app
+  backup still bundles every object for a manual copy.
+
+- **AWS SDK with `requestChecksumCalculation: "WHEN_REQUIRED"`.** Recent SDK versions add CRC32
+  checksums to every PutObject by default, an AWS-specific extension; only sending them when an
+  operation requires one keeps the client compatible with Garage across versions.
+
+- **`/api/health` also checks the bucket** (HeadBucket), so a deploy with wrong S3 credentials
+  fails its health check instead of failing on the first photo upload.
+
+- **Fixed: `sharp` failed to load in the Docker image** (`libvips-cpp.so.8.18.3: No such file`),
+  which broke every photo upload in production. The runner stage ran `npm install --no-save pg
+  drizzle-orm` with no lockfile, which re-resolves *every* dependency to its latest version
+  (sharp 0.35.5 + libvips 8.18.7); the standalone output then laid the locked sharp 0.35.3 on top,
+  whose binary expects libvips 8.18.3. Latent until sharp shipped a patch release. The runner now
+  runs `npm ci --omit=dev` from the lockfile, so every copy agrees. Found while testing the S3
+  switch in the real image; unrelated to S3 itself.

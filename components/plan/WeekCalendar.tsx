@@ -18,10 +18,13 @@ const DAY_LABELS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
 export function WeekCalendar({
   days,
+  today,
   entries,
   recipes,
 }: {
   days: string[];
+  /** Local `YYYY-MM-DD` computed on the server (TZ=America/Sao_Paulo), so SSR and hydration agree. */
+  today: string;
   entries: MealPlanEntryView[];
   recipes: { id: string; title: string }[];
 }) {
@@ -64,7 +67,7 @@ export function WeekCalendar({
       <div className="grid min-w-[720px] grid-cols-[80px_repeat(7,1fr)] gap-2">
         <div />
         {days.map((date, i) => {
-          const isToday = date === new Date().toISOString().slice(0, 10);
+          const isToday = date === today;
           return (
             <div key={date} className="pb-1 text-center">
               <p className="text-xs text-muted-foreground">{DAY_LABELS[i]}</p>
@@ -123,7 +126,7 @@ export function WeekCalendar({
                       <button
                         type="button"
                         onClick={() => removeEntry(entry.id)}
-                        className="shrink-0 opacity-0 group-hover:opacity-100"
+                        className="-m-1 shrink-0 rounded p-1 transition-opacity focus-visible:opacity-100 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100"
                         aria-label="Remover"
                       >
                         <X className="size-3" />

@@ -1,10 +1,12 @@
 import { notFound } from "next/navigation";
+import { requireSession } from "@/lib/session";
 import { getRecipeById } from "@/lib/services/recipe";
 import { listCategories } from "@/lib/services/category";
 import { RecipeForm, type RecipeFormValues } from "@/components/recipes/RecipeForm";
 
 export default async function EditRecipePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  await requireSession(`/recipes/${id}/edit`);
   const [recipe, categories] = await Promise.all([getRecipeById(id), listCategories()]);
 
   if (!recipe) notFound();

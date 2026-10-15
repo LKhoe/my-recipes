@@ -1,8 +1,7 @@
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { auth } from "@/lib/auth";
+import { requireSession } from "@/lib/session";
 import { getRecipeById } from "@/lib/services/recipe";
 import { getUserRating } from "@/lib/services/rating";
 import { getUserNote } from "@/lib/services/note";
@@ -23,13 +22,13 @@ import { Pencil, ChefHat, Clock, Users } from "lucide-react";
 
 export default async function RecipeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await requireSession(`/recipes/${id}`);
   const recipe = await getRecipeById(id);
   if (!recipe) notFound();
 
   const [rating, noteBody, kitchenState, cookPhotos, tips] = await Promise.all([
-    session?.user ? getUserRating(session.user.id, id) : Promise.resolve(null),
-    session?.user ? getUserNote(session.user.id, id) : Promise.resolve(null),
+    getUserRating(session.user.id, id),
+    getUserNote(session.user.id, id),
     getKitchenState(),
     listCookPhotos(id),
     listTips(id),

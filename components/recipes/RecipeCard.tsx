@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { ChefHat } from "lucide-react";
 import type { RecipeListItem } from "@/types";
-import { imageSrc } from "@/lib/image-url";
+import { thumbnailSrc } from "@/lib/image-url";
 import { TransitionLink } from "@/components/ViewTransitions";
 
 export function RecipeCard({ recipe, index = 0 }: { recipe: RecipeListItem; index?: number }) {
@@ -17,7 +17,7 @@ export function RecipeCard({ recipe, index = 0 }: { recipe: RecipeListItem; inde
       >
         {recipe.imagePath ? (
           <Image
-            src={imageSrc(recipe.imagePath)}
+            src={thumbnailSrc(recipe.imagePath)}
             alt={recipe.title}
             fill
             unoptimized

@@ -35,18 +35,23 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# postgresql-client (matching the postgres:16 service's major version) for the backup export
-# route (SPEC §4.9), which spawns pg_dump directly.
-RUN apk add --no-cache postgresql16-client
+# postgresql-client for the backup export route (SPEC §4.9), which spawns pg_dump directly. Its
+# major version must be >= the server's (LocalInfra's PG_VERSION, currently 17) or pg_dump
+# refuses to run with "server version mismatch".
+ARG PG_MAJOR=17
+RUN apk add --no-cache postgresql${PG_MAJOR}-client
 
 # Don't run as root
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Runtime deps needed for the migration/seed scripts (pg + drizzle-orm), not bundled by
-# Next's standalone output since those scripts run outside the Next.js server process.
-COPY --from=builder --chown=nextjs:nodejs /app/package.json ./
-RUN npm install --no-save pg drizzle-orm
+# Production deps at the lockfile's exact versions, for the plain-.mjs scripts (migrate, seed,
+# create-invite, upload-photos-to-s3) that run outside the Next.js server, and for native files
+# Next's standalone tracing misses (sharp's dlopen'd libvips .so). Must come from the lockfile:
+# a bare `npm install <pkg>` re-resolves every dependency to its latest version, and a newer
+# libvips next to the standalone output's locked sharp fails with "libvips-cpp.so.X: No such file".
+COPY --from=builder --chown=nextjs:nodejs /app/package.json /app/package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 # Copy only the necessary files for standalone mode
 COPY --from=builder /app/public ./public
@@ -63,10 +68,6 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # Copy database migration files and migration/seed scripts (plain .mjs — no tsx/drizzle-kit needed)
 COPY --from=builder --chown=nextjs:nodejs /app/lib/db/migrations ./lib/db/migrations
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
-
-# Uploads directory (SPEC §4.8) — mounted as a volume in docker-compose, created here so the
-# nextjs user owns it even before the volume is attached
-RUN mkdir uploads && chown nextjs:nodejs uploads
 
 # Copy and set up entrypoint script
 COPY --chown=nextjs:nodejs docker-entrypoint.sh /usr/local/bin/
