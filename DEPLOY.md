@@ -12,10 +12,10 @@ the image is built and the container runs on the Pi. Nothing is cloned on the Pi
 │  my-recipes (Next.js)  :3000         │     │                                          │
 │      ├── localinfra_postgres ────────┼────►│  localinfra-postgres  db/role my_recipes│
 │      ├── localinfra_s3 ──────────────┼────►│  localinfra-s3 (Garage) bucket my-recipes│
-│      └── umbrel_main_network         │     │  localinfra-backup → external drive      │
+│      └── localinfra_tunnel           │     │  localinfra-backup → external drive      │
 └──────────│───────────────────────────┘     └──────────────────────────────────────────┘
            ▼
-  Cloudflare Tunnel app (umbrelOS) → http://my-recipes:3000
+  localinfra-tunnel (Cloudflare) → http://my-recipes:3000
   LAN: http://umbrel.local:3001
 ```
 
@@ -23,7 +23,7 @@ the image is built and the container runs on the Pi. Nothing is cloned on the Pi
   it first). This app has no Redis and no volumes.
 - **Photos** are objects in the private `my-recipes` bucket, on the RAID 1 drive. The bucket is
   never exposed: `/api/uploads/...` streams them to signed-in users only.
-- **Public access** goes through the umbrelOS Cloudflare Tunnel app on `umbrel_main_network`.
+- **Public access** goes through LocalInfra's Cloudflare tunnel (`localinfra-tunnel`) on `localinfra_tunnel`.
 - **Migrations** run on every container start (`docker-entrypoint.sh`: wait for Postgres →
   `scripts/migrate.mjs` → `scripts/seed.mjs` → start Next.js).
 
@@ -53,7 +53,7 @@ DOCKER_CONTEXT=umbrel ../LocalInfra/scripts/provision-app.sh my_recipes . --no-r
 DOCKER_CONTEXT=umbrel docker exec my-recipes node scripts/create-invite.mjs
 ```
 
-Then, in the Cloudflare Tunnel app, point the public hostname at `http://my-recipes:3000`, and add
+Then, in the Cloudflare tunnel (Zero Trust → Networks → Tunnels), point the public hostname at `http://my-recipes:3000`, and add
 `<public URL>/api/auth/callback/google` to the Google OAuth client's redirect URIs.
 
 ### Moving existing data in
@@ -144,9 +144,6 @@ DOCKER_CONTEXT=umbrel docker exec localinfra-postgres pg_dump -U postgres -Fc my
 - **`password authentication failed for user "my_recipes"`**: `DATABASE_URL` doesn't match the
   role; issue new credentials with `provision-app.sh my_recipes . --no-redis --s3 --rotate`.
 - **`Bind for 0.0.0.0:3001 failed: port is already allocated`**: pick another `PORT` in `.env`.
-- **`network umbrel_main_network declared as external, but could not be found`**: start any
-  umbrelOS app once (the Cloudflare Tunnel app creates it), or remove that network from
-  `docker-compose.yml` if you don't use the tunnel.
 - **Backup download fails with `server version mismatch`**: the image's `pg_dump` is older than
   the server; build with `PG_MAJOR` matching LocalInfra's `PG_VERSION`.
 - **Sign-in redirects to the wrong host**: `BETTER_AUTH_URL` / `NEXT_PUBLIC_APP_URL` must be the
