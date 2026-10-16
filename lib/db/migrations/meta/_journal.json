@@ -43,6 +43,13 @@
       "when": 1792143725321,
       "tag": "0005_furry_zombie",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792145830742,
+      "tag": "0006_merge_hyphenated_ingredients",
+      "breakpoints": true
     }
   ]
 }

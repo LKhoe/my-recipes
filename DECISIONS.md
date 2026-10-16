@@ -1037,13 +1037,16 @@ below.
 - **Hyphens count as spaces in ingredient names**, so "pimenta-do-reino" / "pimenta do reino" and
   "cheiro-verde" / "cheiro verde" are one `ingredient` row and merge on shopping lists. The stored
   (and displayed) name is the hyphen-free form, which drops the official hyphenated spelling;
-  accepted, since one row matters more for merging than the hyphen. **Existing rows need a data
-  migration:** an ingredient saved before this keeps its hyphenated name, and saving a recipe now
-  looks up the hyphen-free name, so it creates a second row and the two don't merge on a shopping
-  list. The migration would, per hyphenated name, repoint `recipe_ingredient` and
-  `shopping_list_item` to the hyphen-free row (renaming the hyphenated row when there is none) and
-  delete the leftover. Not written yet. Find affected rows with
-  `select name from ingredient where name like '%-%'`.
+  accepted, since one row matters more for merging than the hyphen. **Existing rows are merged by
+  migration 0006** (`0006_merge_hyphenated_ingredients.sql`, a hand-written data migration): per
+  hyphen-free name it keeps the existing hyphen-free row, or else one of the hyphenated rows
+  (renamed), repoints `recipe_ingredient` and `shopping_list_item` to it, and deletes the rest.
+  Already-generated shopping lists can now hold two items for the same ingredient; only lists
+  generated from now on merge them. The SQL swaps hyphens for spaces without re-running the app's
+  singularization, which differs only when the last hyphenated part is three letters or shorter
+  and ends in "s" (e.g. a stored "x-pé" from "x-pés" becomes "x pé", while the app would now
+  compute "x pés") — not worth the SQL to cover. Tested on a throwaway Postgres, through the
+  real migrator, with hyphen-only and mixed duplicates; a second run is a no-op.
 
 ## 2026-10-16 — Ingredient sections ("Caldo", "Massa", "Recheio")
 
