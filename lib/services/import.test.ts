@@ -46,6 +46,7 @@ const foundDraft: RecipeDraft = {
 describe("importRecipeFromUrl", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     vi.mocked(isYouTubeUrl).mockReturnValue(false);
   });
 
@@ -74,51 +75,76 @@ describe("importRecipeFromUrl", () => {
     );
   });
 
-  it("uses the video description and skips the transcript when it yields a recipe", async () => {
+  it("sends the title, description and transcript together in one LLM call", async () => {
     vi.mocked(isYouTubeUrl).mockReturnValue(true);
     vi.mocked(parseYouTubeVideoId).mockReturnValue("abc123");
     vi.mocked(fetchVideoMetadata).mockResolvedValue({
       title: "Tomato Pasta",
-      description: "recipe in the description",
+      description: "ingredients: 400g tomatoes",
       thumbnailUrl: "https://img.example.com/thumb.jpg",
     });
+    vi.mocked(fetchTranscriptText).mockResolvedValue("hey everyone... a glug of olive oil ...");
     vi.mocked(extractRecipeWithLLM).mockResolvedValue(foundDraft);
 
     const draft = await importRecipeFromUrl("https://youtu.be/abc123");
 
-    expect(draft).toBe(foundDraft);
+    expect(draft).toEqual(foundDraft);
     expect(extractRecipeWithLLM).toHaveBeenCalledTimes(1);
     expect(extractRecipeWithLLM).toHaveBeenCalledWith(
-      "recipe in the description",
-      expect.objectContaining({ context: "youtube-description", allowEstimation: true }),
+      "Title: Tomato Pasta\n\nDescription:\ningredients: 400g tomatoes\n\nTranscript:\nhey everyone... a glug of olive oil ...",
+      expect.objectContaining({
+        context: "youtube",
+        allowEstimation: true,
+        imageUrl: "https://img.example.com/thumb.jpg",
+      }),
     );
-    expect(fetchTranscriptText).not.toHaveBeenCalled();
   });
 
-  it("falls back to the transcript when the description has no usable recipe", async () => {
+  it("uses the transcript alone when there is no metadata (no API key)", async () => {
     vi.mocked(isYouTubeUrl).mockReturnValue(true);
     vi.mocked(parseYouTubeVideoId).mockReturnValue("abc123");
-    vi.mocked(fetchVideoMetadata).mockResolvedValue({
-      title: "Tomato Pasta",
-      description: "check out my channel, new video every week!",
-      thumbnailUrl: null,
-    });
-    vi.mocked(extractRecipeWithLLM)
-      .mockResolvedValueOnce({ ...foundDraft, recipeFound: false })
-      .mockResolvedValueOnce(foundDraft);
+    vi.mocked(fetchVideoMetadata).mockResolvedValue(null);
     vi.mocked(fetchTranscriptText).mockResolvedValue("hey everyone... a glug of olive oil ...");
+    vi.mocked(extractRecipeWithLLM).mockResolvedValue(foundDraft);
 
     const draft = await importRecipeFromUrl("https://youtu.be/abc123");
 
-    expect(draft).toBe(foundDraft);
-    expect(extractRecipeWithLLM).toHaveBeenCalledTimes(2);
-    expect(extractRecipeWithLLM).toHaveBeenLastCalledWith(
-      "hey everyone... a glug of olive oil ...",
-      expect.objectContaining({ context: "youtube-transcript", allowEstimation: true }),
+    expect(draft).toEqual(foundDraft);
+    expect(extractRecipeWithLLM).toHaveBeenCalledWith(
+      "Transcript:\nhey everyone... a glug of olive oil ...",
+      expect.objectContaining({ context: "youtube", imageUrl: null }),
     );
   });
 
-  it("signals manual entry with title/videoUrl prefilled when nothing yields a recipe (SPEC §4.6b step 3)", async () => {
+  it("fixes an all-caps title the LLM copied from the video", async () => {
+    vi.mocked(isYouTubeUrl).mockReturnValue(true);
+    vi.mocked(parseYouTubeVideoId).mockReturnValue("abc123");
+    vi.mocked(fetchVideoMetadata).mockResolvedValue(null);
+    vi.mocked(fetchTranscriptText).mockResolvedValue("oi gente hoje eu vou fazer...");
+    vi.mocked(extractRecipeWithLLM).mockResolvedValue({ ...foundDraft, title: "CORAÇÃO DE BOI ACEBOLADO" });
+
+    const draft = await importRecipeFromUrl("https://youtu.be/abc123");
+
+    expect(draft.title).toBe("Coração de boi acebolado");
+  });
+
+  it("strips the channel suffix from the video title in the manual-entry fallback", async () => {
+    vi.mocked(isYouTubeUrl).mockReturnValue(true);
+    vi.mocked(parseYouTubeVideoId).mockReturnValue("abc123");
+    vi.mocked(fetchVideoMetadata).mockResolvedValue({
+      title: "CORAÇÃO DE BOI ACEBOLADO// receitas,casa e coisas.",
+      description: "",
+      thumbnailUrl: null,
+    });
+    vi.mocked(fetchTranscriptText).mockResolvedValue(null);
+
+    const draft = await importRecipeFromUrl("https://youtu.be/abc123");
+
+    expect(draft.recipeFound).toBe(false);
+    expect(draft.title).toBe("Coração de boi acebolado");
+  });
+
+  it("signals manual entry with title/videoUrl prefilled when no recipe is found (SPEC §4.6b step 3)", async () => {
     vi.mocked(isYouTubeUrl).mockReturnValue(true);
     vi.mocked(parseYouTubeVideoId).mockReturnValue("abc123");
     vi.mocked(fetchVideoMetadata).mockResolvedValue({
@@ -126,8 +152,8 @@ describe("importRecipeFromUrl", () => {
       description: "just chatting today",
       thumbnailUrl: "https://img.example.com/thumb.jpg",
     });
-    vi.mocked(extractRecipeWithLLM).mockResolvedValue({ ...foundDraft, recipeFound: false });
     vi.mocked(fetchTranscriptText).mockResolvedValue(null);
+    vi.mocked(extractRecipeWithLLM).mockResolvedValue({ ...foundDraft, recipeFound: false });
 
     const draft = await importRecipeFromUrl("https://youtu.be/abc123");
 
@@ -135,5 +161,31 @@ describe("importRecipeFromUrl", () => {
     expect(draft.title).toBe("My Vlog");
     expect(draft.videoUrl).toBe("https://youtu.be/abc123");
     expect(draft.imageUrl).toBe("https://img.example.com/thumb.jpg");
+  });
+
+  it("signals manual entry instead of failing when the LLM call throws", async () => {
+    vi.mocked(isYouTubeUrl).mockReturnValue(true);
+    vi.mocked(parseYouTubeVideoId).mockReturnValue("abc123");
+    vi.mocked(fetchVideoMetadata).mockResolvedValue({ title: "Tomato Pasta", description: "", thumbnailUrl: null });
+    vi.mocked(fetchTranscriptText).mockResolvedValue("hey everyone...");
+    vi.mocked(extractRecipeWithLLM).mockRejectedValue(new Error("OpenRouter is down"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const draft = await importRecipeFromUrl("https://youtu.be/abc123");
+
+    expect(draft.recipeFound).toBe(false);
+    expect(draft.title).toBe("Tomato Pasta");
+  });
+
+  it("skips the LLM when there is neither a description nor a transcript", async () => {
+    vi.mocked(isYouTubeUrl).mockReturnValue(true);
+    vi.mocked(parseYouTubeVideoId).mockReturnValue("abc123");
+    vi.mocked(fetchVideoMetadata).mockResolvedValue({ title: "Tomato Pasta", description: "", thumbnailUrl: null });
+    vi.mocked(fetchTranscriptText).mockResolvedValue(null);
+
+    const draft = await importRecipeFromUrl("https://youtu.be/abc123");
+
+    expect(draft.recipeFound).toBe(false);
+    expect(extractRecipeWithLLM).not.toHaveBeenCalled();
   });
 });

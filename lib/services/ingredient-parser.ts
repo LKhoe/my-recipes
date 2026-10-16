@@ -85,6 +85,15 @@ const UNIT_ALIASES: Record<string, string> = {
   tbsp: "csp",
   tablespoon: "csp",
   tablespoons: "csp",
+  // Colher de sobremesa (~10 ml) sits between the two; mapping it to either would halve or
+  // double the amount when scaling.
+  csb: "csb",
+  "colher de sobremesa": "csb",
+  "colheres de sobremesa": "csb",
+  "colher (sobremesa)": "csb",
+  "colheres (sobremesa)": "csb",
+  dessertspoon: "csb",
+  dessertspoons: "csb",
   cch: "cch",
   "colher de chá": "cch",
   "colher de cha": "cch",

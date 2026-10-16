@@ -29,13 +29,12 @@ const llmRecipeSchema = z.object({
   ingredients: z.array(llmIngredientSchema).default([]),
 });
 
-export type ExtractionContext = "webpage" | "youtube-description" | "youtube-transcript";
+export type ExtractionContext = "webpage" | "youtube";
 
 function buildSystemPrompt(context: ExtractionContext, allowEstimation: boolean): string {
   const sourceLabel = {
     webpage: "a recipe webpage's text content",
-    "youtube-description": "a YouTube video's description",
-    "youtube-transcript": "a YouTube video's spoken transcript",
+    youtube: "a YouTube video's title, description and spoken transcript (either may be missing)",
   }[context];
 
   return `You extract a single cooking recipe from ${sourceLabel}. Respond with ONLY a JSON object, no markdown fences, matching exactly this shape:
@@ -53,13 +52,19 @@ function buildSystemPrompt(context: ExtractionContext, allowEstimation: boolean)
 
 Rules:
 - If there is no recipe in the text, set "recipeFound": false and leave the rest empty/null.
-- Split every ingredient line into "ingredientName" (bare noun), "quantity" (a plain decimal number, or null if not stated), "unit" (metric or a common Brazilian Portuguese cooking-unit token: g, kg, ml, l, xíc, csp, cch, dente, pitada, fatia, lata, unidade — or null), and "note" (prep detail like "picado", "derretida", "a gosto" — or null). Normalize the unit to one of those tokens even if the source spells it out differently (e.g. "colher de sopa" -> "csp", "xícara" -> "xíc").
+- "title" is the dish's name in sentence case, in the recipe's own language: capitalize only the first word and proper nouns (e.g. "Coração de boi acebolado", never "CORAÇÃO DE BOI ACEBOLADO" or "Coração De Boi Acebolado"), with no channel name, emojis or hashtags.
+- Split every ingredient line into "ingredientName" (bare noun), "quantity" (a plain decimal number), "unit" (metric or a common Brazilian Portuguese cooking-unit token: g, kg, ml, l, xíc, csp, csb, cch, dente, pitada, fatia, lata, maço, ramo, pacote, tablete, unidade), and "note" (prep detail like "picado", "derretida", "a gosto" — or null). Normalize the unit to one of those tokens even if the source spells it out differently: "colher de sopa" -> "csp", "colher de sobremesa" or "colherinha de sobremesa" -> "csb", "colher de chá" or "colherinha" -> "cch", "xícara" -> "xíc".
+- "quantity" and "unit" come as a pair: both set, or both null. Never return a quantity without a unit or a unit without a quantity. Whole items counted by number (ovos, cebolas, tomates, limões) take the unit "unidade". An ingredient with no amount (one the rule below doesn't have you estimate) gets null for both, with "a gosto" in "note" only when the source says so.
 - prepTime/cookTime are total minutes as a number, only if explicitly stated; otherwise null.
 - "durationMinutes" on a step is a number only when that step states a specific duration (e.g. "bake for 25 minutes" -> 25); otherwise null.
 - "servings" is a plain integer if stated (e.g. "serves 4-6" -> 4); otherwise null.
 ${
+  context === "youtube"
+    ? "- The transcript is usually auto-generated captions: no punctuation, some misheard words, plus greetings and channel chatter to ignore. Where the description lists ingredients or quantities, prefer it over the transcript; take the method from the transcript.\n"
+    : ""
+}${
   allowEstimation
-    ? '- If a quantity is vague ("uma pitada de sal", "um fio de azeite", "um punhado de salsinha"), give your best numeric estimate with a sensible unit and set "inferred": true. If truly unquantifiable, leave quantity/unit null and "inferred": false.'
+    ? '- If a quantity is vague ("uma pitada de sal", "um fio de azeite", "um punhado de salsinha", "um pouco de shoyu", "dois dedos de água"), give your best numeric estimate with a sensible unit from the list (liquids in ml or csp, herbs in maço or csp) and set "inferred": true. The same goes for an ingredient added with no amount at all ("adicione cebola, pimentão e tomate"): estimate a typical amount for the recipe (e.g. 1 unidade de cebola). Only when it is truly unquantifiable ("sal a gosto") leave quantity/unit null and "inferred": false.'
     : '- Only set "quantity" when a number is explicitly stated in the text. Never estimate. "inferred" is always false.'
 }`;
 }
@@ -160,7 +165,8 @@ export async function extractRecipeWithLLM(
     ingredients: data.ingredients.map((i) => ({
       ingredientName: i.ingredientName,
       quantity: i.quantity ?? null,
-      unit: i.unit ?? null,
+      // A unit with no quantity ("pitada" of nothing) can't be scaled or merged on a shopping list.
+      unit: i.quantity != null ? (i.unit ?? null) : null,
       note: i.note ?? null,
       inferred: i.inferred ?? false,
     })),

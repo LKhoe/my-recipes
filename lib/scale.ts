@@ -7,10 +7,11 @@ export function scaleQuantity(quantity: number, originalServings: number, target
 }
 
 // Cooking units that are conventionally expressed as fractions (whole eggs, cloves of garlic,
-// xíc/csp/cch measures) rather than decimals. Portuguese unit vocabulary — see ingredient-parser.ts.
+// xíc/csp/csb/cch measures) rather than decimals. Portuguese unit vocabulary — see ingredient-parser.ts.
 const FRACTION_FRIENDLY_UNITS = new Set([
   "xíc",
   "csp",
+  "csb",
   "cch",
   "dente",
   "fatia",

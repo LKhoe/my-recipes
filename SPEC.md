@@ -160,15 +160,18 @@ Cooking) rather than an internal tool or a default-shadcn admin dashboard.
 - User pastes a YouTube URL (`youtube.com` / `youtu.be`), either via the same import box as 4.6
   or directly on the recipe form.
 - No video or audio is ever downloaded or processed on the server — extraction uses text YouTube
-  already has, cheapest source first:
-  1. **Video description** — many cooking channels paste the full recipe there. Fetched via the
-     YouTube Data API v3 (free quota, API key only); run through the same LLM extraction as 4.6.
-  2. **Captions/transcript** — if the description yields no recipe, fetch YouTube's own captions
-     (auto-generated ones exist for most videos) via `youtubei.js` (Innertube, no API key
-     needed) and run LLM extraction over the transcript. A 10-minute video is ~1,500–2,000
-     words, so the LLM call stays small and cheap.
-  3. If neither yields a usable recipe, tell the user and open manual entry (4.6c) with
-     `videoUrl` and title pre-filled from the video metadata.
+  already has, fetched in parallel and sent to the LLM together in one call:
+  1. **Video title and description** — many cooking channels paste the full recipe, or at least
+     the ingredient list with exact quantities, in the description. Fetched via the YouTube Data
+     API v3 (free quota, API key only).
+  2. **Captions/transcript** — YouTube's own captions (auto-generated ones exist for most
+     videos), read straight from the caption track via `youtubei.js` (Innertube, no API key
+     needed). This is usually where the method is. A 10-minute video is ~1,500–2,000 words, so
+     the LLM call stays small and cheap.
+  3. If that yields no usable recipe (or neither text is available, or the LLM call fails), tell
+     the user and open manual entry (4.6c) with `videoUrl` and title pre-filled from the video
+     metadata (the title without the channel suffix after "//" or "|", and in sentence case when
+     the video's is all caps).
 - Transcripts often narrate imprecise quantities ("a good glug of oil"); the draft UI flags
   quantities the LLM inferred rather than read verbatim, so the user can verify them.
 - YouTube import is server-side only (caption/description fetching is cross-origin, so the

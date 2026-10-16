@@ -29,6 +29,15 @@ describe("parseIngredientLine", () => {
     });
   });
 
+  it("parses colher de sobremesa as csb, not a bare colher", () => {
+    expect(parseIngredientLine("1 colher de sobremesa cominho")).toEqual({
+      quantity: 1,
+      unit: "csb",
+      name: "cominho",
+      note: null,
+    });
+  });
+
   it("handles unquantified 'a gosto' ingredients (SPEC §4.3)", () => {
     const result = parseIngredientLine("Sal, a gosto");
     expect(result.quantity).toBeNull();
@@ -105,6 +114,11 @@ describe("normalizeUnit", () => {
     expect(normalizeUnit("colheres")).toBe("csp");
     expect(normalizeUnit("fatias")).toBe("fatia");
     expect(normalizeUnit("dentes")).toBe("dente");
+  });
+
+  it("keeps colher de sobremesa apart from csp and cch", () => {
+    expect(normalizeUnit("colher de sobremesa")).toBe("csb");
+    expect(normalizeUnit("colheres (sobremesa)")).toBe("csb");
   });
 
   it("is case-insensitive and trims whitespace", () => {

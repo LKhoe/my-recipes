@@ -27,6 +27,7 @@ export function NewRecipeClient({ categories }: { categories: { id: string; name
   const [manualPrefill, setManualPrefill] = useState<{
     values: Partial<RecipeFormValues>;
     imageUrl: string | null;
+    notice: string;
   } | null>(null);
 
   if (draft?.recipeFound) {
@@ -42,12 +43,17 @@ export function NewRecipeClient({ categories }: { categories: { id: string; name
 
   if (manualPrefill) {
     return (
-      <RecipeForm
-        mode="create"
-        categories={categories}
-        initialValues={manualPrefill.values}
-        initialRemoteImageUrl={manualPrefill.imageUrl}
-      />
+      <div className="flex flex-col gap-4">
+        <p role="status" className="rounded-lg border border-accent bg-accent/30 p-3 text-sm">
+          {manualPrefill.notice}
+        </p>
+        <RecipeForm
+          mode="create"
+          categories={categories}
+          initialValues={manualPrefill.values}
+          initialRemoteImageUrl={manualPrefill.imageUrl}
+        />
+      </div>
     );
   }
 
@@ -65,7 +71,7 @@ export function NewRecipeClient({ categories }: { categories: { id: string; name
               setDraft(result);
             } else {
               // SPEC §4.6b step 3: no recipe found in the video — open manual entry with
-              // title/videoUrl/thumbnail prefilled from the video's own metadata.
+              // title/videoUrl/thumbnail prefilled from the video's own metadata, and say why.
               setManualPrefill({
                 values: {
                   title: result.title,
@@ -73,6 +79,9 @@ export function NewRecipeClient({ categories }: { categories: { id: string; name
                   videoUrl: result.videoUrl,
                 },
                 imageUrl: result.imageUrl,
+                notice: result.videoUrl
+                  ? "Não encontramos uma receita neste vídeo, então abrimos a entrada manual com o título e o link do vídeo já preenchidos."
+                  : "Não encontramos uma receita nesta página, então abrimos a entrada manual com o link já preenchido.",
               });
             }
           }}

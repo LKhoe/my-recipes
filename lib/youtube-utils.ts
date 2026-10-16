@@ -1,4 +1,4 @@
-// Pure URL parsing, deliberately dependency-free (no youtubei.js) so it's safe to import from
+// Pure helpers, deliberately dependency-free (no youtubei.js) so it's safe to import from
 // client components (lib/services/youtube.ts pulls in Innertube, which is server-only weight).
 
 export function parseYouTubeVideoId(url: string): string | null {
@@ -24,4 +24,21 @@ export function parseYouTubeVideoId(url: string): string | null {
 
 export function isYouTubeUrl(url: string): boolean {
   return parseYouTubeVideoId(url) !== null;
+}
+
+/**
+ * A video title as a recipe title: drops the channel suffix after "//" or "|" ("CORAÇÃO DE BOI
+ * ACEBOLADO// receitas,casa e coisas." -> "CORAÇÃO DE BOI ACEBOLADO") and turns an all-caps title
+ * into sentence case ("Coração de boi acebolado"). A title that is not mostly capitals keeps its
+ * casing, since it may hold proper nouns.
+ */
+export function cleanVideoTitle(title: string): string {
+  const withoutSuffix = title.split(/\/\/|\|/)[0].trim().replace(/[\s.,;:!-]+$/, "");
+  const cleaned = withoutSuffix || title.trim();
+
+  const letters = cleaned.match(/\p{L}/gu) ?? [];
+  const capitals = cleaned.match(/\p{Lu}/gu) ?? [];
+  if (letters.length < 3 || capitals.length / letters.length < 0.7) return cleaned;
+
+  return cleaned.toLocaleLowerCase("pt-BR").replace(/\p{L}/u, (first) => first.toLocaleUpperCase("pt-BR"));
 }

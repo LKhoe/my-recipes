@@ -40,7 +40,7 @@ describe("extractRecipeWithLLM", () => {
     ) as unknown as typeof fetch;
 
     const draft = await extractRecipeWithLLM("hey everyone welcome back...", {
-      context: "youtube-transcript",
+      context: "youtube",
       allowEstimation: true,
       sourceUrl: null,
       videoUrl: "https://youtube.com/watch?v=abc123",
@@ -54,11 +54,30 @@ describe("extractRecipeWithLLM", () => {
     expect(draft.ingredients[1]).toMatchObject({ ingredientName: "salt", quantity: null, inferred: false });
   });
 
+  it("drops a unit that comes without a quantity", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      mockOpenRouterResponse({
+        recipeFound: true,
+        title: "Coração de boi acebolado",
+        ingredients: [{ ingredientName: "cheiro verde", quantity: null, unit: "maço", note: "a gosto", inferred: false }],
+      }),
+    ) as unknown as typeof fetch;
+
+    const draft = await extractRecipeWithLLM("oi gente...", {
+      context: "youtube",
+      allowEstimation: true,
+      sourceUrl: null,
+      videoUrl: null,
+    });
+
+    expect(draft.ingredients[0]).toMatchObject({ quantity: null, unit: null, note: "a gosto" });
+  });
+
   it("reports recipeFound: false without throwing when no recipe is present", async () => {
     global.fetch = vi.fn().mockResolvedValue(mockOpenRouterResponse({ recipeFound: false })) as unknown as typeof fetch;
 
     const draft = await extractRecipeWithLLM("just a vlog about my day, no cooking", {
-      context: "youtube-transcript",
+      context: "youtube",
       allowEstimation: true,
       sourceUrl: null,
       videoUrl: "https://youtube.com/watch?v=xyz",

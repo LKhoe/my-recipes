@@ -2,6 +2,7 @@ import { fetchPageHtml, stripToReadableText } from "@/lib/services/html-fetch";
 import { extractRecipeFromJsonLd } from "@/lib/services/jsonld";
 import { extractRecipeWithLLM } from "@/lib/services/llm";
 import { fetchTranscriptText, fetchVideoMetadata, isYouTubeUrl, parseYouTubeVideoId } from "@/lib/services/youtube";
+import { cleanVideoTitle } from "@/lib/youtube-utils";
 import type { RecipeDraft } from "@/types";
 
 async function importFromWebpage(url: string): Promise<RecipeDraft> {
@@ -27,37 +28,40 @@ async function importFromYouTube(url: string): Promise<RecipeDraft> {
     throw new Error("Could not parse a video id from that YouTube URL.");
   }
 
-  const metadata = await fetchVideoMetadata(videoId);
+  // SPEC §4.6b: description and transcript go to the LLM together, in one call — the description
+  // often has the exact quantities, the transcript the method.
+  const [metadata, transcript] = await Promise.all([fetchVideoMetadata(videoId), fetchTranscriptText(videoId)]);
 
-  // SPEC §4.6b step 1: video description first — cheapest source.
-  if (metadata?.description) {
-    const draft = await extractRecipeWithLLM(metadata.description, {
-      context: "youtube-description",
-      allowEstimation: true,
-      sourceUrl: url,
-      videoUrl: url,
-      imageUrl: metadata.thumbnailUrl,
-    }).catch(() => null);
-    if (draft?.recipeFound) return draft;
+  if (metadata?.description || transcript) {
+    const sections = [
+      metadata?.title && `Title: ${metadata.title}`,
+      metadata?.description && `Description:\n${metadata.description}`,
+      transcript && `Transcript:\n${transcript}`,
+    ].filter(Boolean);
+
+    try {
+      const draft = await extractRecipeWithLLM(sections.join("\n\n"), {
+        context: "youtube",
+        allowEstimation: true,
+        sourceUrl: url,
+        videoUrl: url,
+        imageUrl: metadata?.thumbnailUrl ?? null,
+      });
+      // The prompt asks for a sentence-case title, but the model sometimes copies an all-caps video
+      // title as-is.
+      if (draft.recipeFound) return { ...draft, title: cleanVideoTitle(draft.title || metadata?.title || "") };
+      console.warn(`[import] ${videoId}: no recipe in the video's description or transcript`);
+    } catch (err) {
+      console.error(`[import] ${videoId}: LLM extraction failed:`, err);
+    }
+  } else {
+    console.warn(`[import] ${videoId}: neither a description nor a transcript is available`);
   }
 
-  // SPEC §4.6b step 2: fall back to the transcript.
-  const transcript = await fetchTranscriptText(videoId);
-  if (transcript) {
-    const draft = await extractRecipeWithLLM(transcript, {
-      context: "youtube-transcript",
-      allowEstimation: true,
-      sourceUrl: url,
-      videoUrl: url,
-      imageUrl: metadata?.thumbnailUrl ?? null,
-    }).catch(() => null);
-    if (draft?.recipeFound) return draft;
-  }
-
-  // SPEC §4.6b step 3: neither yielded a recipe — signal manual entry, title/videoUrl prefilled.
+  // SPEC §4.6b step 3: no recipe found — signal manual entry, title/videoUrl prefilled.
   return {
     recipeFound: false,
-    title: metadata?.title ?? "",
+    title: cleanVideoTitle(metadata?.title ?? ""),
     description: null,
     servings: null,
     prepTime: null,

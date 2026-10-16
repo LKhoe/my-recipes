@@ -961,3 +961,51 @@ below.
   a plain `./deploy.sh` deploys the working tree, and `--release` does the bump + commit + push
   (the old default) — deploying should never publish to GitHub as a side effect. First-time
   setup uses `LocalInfra/scripts/provision-app.sh`, which writes the credentials into `.env`.
+
+## 2026-10-15 — Fix: YouTube transcripts were never fetched
+
+- **Transcripts come from the caption track, via the ANDROID client.** Innertube's
+  `get_transcript` endpoint (`info.getTranscript()`) started answering HTTP 400, and the error was
+  swallowed, so every video without a recipe in its description fell through to manual entry
+  (found on a Portuguese recipe video, `zrdG7zsIZns`). The WEB client's caption URLs now need a PO
+  token (they return an empty body); the ANDROID client's don't. `fetchTranscriptText` reads the
+  track as `json3`, preferring Portuguese, then creator-made over auto-generated captions.
+
+- **Description and transcript go to the LLM together, in one call** (`context: "youtube"`),
+  instead of description first and transcript second. Descriptions often hold the ingredient list
+  with exact quantities and transcripts the method; seeing both gives a better draft than either
+  alone, and a video with no recipe in its description costs one LLM call instead of two.
+
+- **Failures in the YouTube path are logged** (`[youtube]`/`[import]` prefixes): no captions, a
+  failed caption download, a Data API error, no recipe found, an LLM error. The import still falls
+  back to manual entry, but the reason is now in the server logs; the silent fallback is what hid
+  this bug. youtubei.js's own parser warnings (a stack trace per unrecognised page element) are
+  silenced with `Log.setLevel(Log.Level.ERROR)`.
+
+## 2026-10-16 — YouTube import quality (from `zrdG7zsIZns`)
+
+- **Thumbnail: the largest one the video has** — `maxres` → `standard` → `high` → … The old pick,
+  `high` (480x360), is a 4:3 frame with black bars around a 16:9 picture; only `maxres` (1280x720)
+  is true 16:9, and some videos don't have it.
+
+- **Titles are cleaned in code, not only in the prompt.** The prompt now asks for a sentence-case
+  dish name, but the model still sometimes copies an all-caps video title, so `cleanVideoTitle`
+  (`lib/youtube-utils.ts`) runs on the LLM's title and on the manual-entry fallback's title: it
+  drops a channel suffix after `//` or `|` and lowercases a title that is ≥70% capitals
+  ("CORAÇÃO DE BOI ACEBOLADO// receitas,casa e coisas." → "Coração de boi acebolado"). A title in
+  mixed case is left alone, since lowercasing would lose proper nouns.
+
+- **Quantity and unit come as a pair.** The prompt says both or neither, with `unidade` for
+  counted items, and asks for an estimate (when estimation is allowed) for ingredients named with
+  no amount at all; "um pouco de shoyu" came back as `1` with no unit, "dois dedos de água" as
+  `2 unidade`. `extractRecipeWithLLM` also drops a unit that arrives without a quantity, which
+  can't be scaled or merged. A quantity without a unit is left as is: code can't know the unit.
+
+- **New unit token `csb` (colher de sobremesa, ~10 ml).** It was mapped to `cch` by the model
+  and, in the line parser, to a bare `colher` (`csp`) with "de sobremesa" left in the name. It is
+  roughly twice a `cch` and two thirds of a `csp`, so mapping it to either one gets the amount
+  wrong. Added to `UNIT_ALIASES`, the fraction-friendly units in `lib/scale.ts` and the prompt.
+
+- **Manual-entry fallback says why.** `NewRecipeClient` shows a short pt-BR notice above the form
+  ("Não encontramos uma receita neste vídeo…"; "nesta página" for a webpage), as SPEC §4.6b step 3
+  already asked for.
