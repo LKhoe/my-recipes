@@ -23,6 +23,12 @@ export const recipeIngredientInputSchema = z.object({
   quantity: z.number().nonnegative().nullable(),
   unit: z.string().nullable(),
   note: z.string().nullable(),
+  group: z
+    .string()
+    .max(60)
+    .nullable()
+    .optional()
+    .transform((v) => v?.trim() || null),
   inferred: z.boolean().optional(),
 });
 

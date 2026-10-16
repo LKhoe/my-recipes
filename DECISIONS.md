@@ -1044,3 +1044,37 @@ below.
   `shopping_list_item` to the hyphen-free row (renaming the hyphenated row when there is none) and
   delete the leftover. Not written yet. Find affected rows with
   `select name from ingredient where name like '%-%'`.
+
+## 2026-10-16 — Ingredient sections ("Caldo", "Massa", "Recheio")
+
+Multi-part recipes lost their structure on import: a risotto with "CALDO: 1 cebola" and
+"RISOTO: 1/2 cebola" became "1.5 unidade cebola", and at least 11 of the 41 recipes from the
+57-video playlist run listed one ingredient twice with no way to tell which part it was for.
+
+- **A nullable label on each row, not a section table.** `recipe_ingredient.group_name` (TS
+  `group`); a section is a run of consecutive rows (by `order`) with the same label, and null means
+  no heading. Recipes saved before this have null everywhere and render exactly as before. A
+  `recipe_ingredient_group` table would give sections their own order and ids, but nothing needs
+  that yet, and the flat list keeps every existing reader (scaling, Alexa, shopping list) unchanged.
+  `groupIngredientSections` (`lib/ingredient-groups.ts`) does the splitting for every view.
+
+- **Labels are cleaned in code**, on import and again on save (`normalizeGroupLabel`): trailing
+  colon dropped, "Para o recheio" -> "Recheio", all-caps -> sentence case, and a heading that only
+  says "Ingredientes" is no section at all.
+
+- **The LLM is asked for `group` per ingredient**, the same short label on each ingredient of a
+  part, null for a single-list recipe, and told to list an ingredient once per part instead of
+  summing it across parts.
+
+- **JSON-LD: heading lines become sections.** schema.org's `recipeIngredient` is a flat string
+  list with no sections, but sites often put a part's heading in it as its own line. A line ending
+  in ":" with no digits ("Para o molho:", "MASSA:") now sets the section of the lines after it
+  instead of becoming an ingredient named "Para o molho:".
+
+- **The shopping list still merges across sections.** It merges by canonical ingredient and unit,
+  never looked at the section, so 1 + 1/2 cebola is one 1.5 line to buy.
+
+- **Editor: headings, not a per-row field.** A section shows as an indented block with its name
+  in an input, its own "Adicionar ingrediente" and a "Remover seção" that keeps the ingredients
+  (they join the section above). "Adicionar seção" starts a new one at the end. There's no
+  drag-to-move between sections; delete and re-add a row to move it.

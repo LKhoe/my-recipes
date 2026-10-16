@@ -50,6 +50,37 @@ describe("extractRecipeFromJsonLd", () => {
     ]);
   });
 
+  it("turns heading lines like 'Para o molho:' into the section of the lines after them", () => {
+    const node = {
+      "@context": "https://schema.org",
+      "@type": "Recipe",
+      name: "Lasanha",
+      recipeIngredient: [
+        "Para a massa:",
+        "300 g farinha de trigo",
+        "3 ovos",
+        "MOLHO:",
+        "1 cebola",
+        "500 g tomate",
+      ],
+      recipeInstructions: ["Faça a massa.", "Faça o molho."],
+    };
+    const html = `<script type="application/ld+json">${JSON.stringify(node)}</script>`;
+    const draft = extractRecipeFromJsonLd(html, "https://example.com/lasanha");
+
+    expect(draft!.ingredients.map((i) => [i.group, i.ingredientName])).toEqual([
+      ["Massa", "farinha de trigo"],
+      ["Massa", "ovos"],
+      ["Molho", "cebola"],
+      ["Molho", "tomate"],
+    ]);
+  });
+
+  it("leaves ingredients ungrouped when the list has no heading lines", () => {
+    const draft = extractRecipeFromJsonLd(loadFixture("jsonld-basic.html"), "https://example.com/roast-chicken");
+    expect(draft!.ingredients.every((i) => i.group === null)).toBe(true);
+  });
+
   it("returns null when there is no JSON-LD Recipe node", () => {
     const html = loadFixture("no-jsonld.html");
     expect(extractRecipeFromJsonLd(html, "https://example.com/pancakes")).toBeNull();

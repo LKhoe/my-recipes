@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { X, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Play, Pause, RotateCcw, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatCountdown, formatIngredientLine } from "@/lib/format";
+import { formatCountdown } from "@/lib/format";
 import { useIngredientScaling } from "@/hooks/use-ingredient-scaling";
+import { IngredientSections } from "@/components/recipes/IngredientSections";
 import { ScaleControls } from "@/components/recipes/ScaleControls";
 import type { RecipeIngredientInput, RecipeStep } from "@/types";
 
@@ -213,13 +214,7 @@ export function CookModeClient({
           <div className="mb-2">
             <ScaleControls servings={servings} factor={factor} onAdjustServings={adjustServings} onSetFactor={setFactor} />
           </div>
-          <ul className="flex flex-col gap-1.5 text-sm">
-            {ingredients.map((item, i) => (
-              <li key={`${i}-${factor}`} className="animate-number-roll">
-                {formatIngredientLine(item, factor)}
-              </li>
-            ))}
-          </ul>
+          <IngredientSections ingredients={ingredients} factor={factor} listClassName="gap-1.5" />
         </div>
       )}
 

@@ -7,6 +7,8 @@ export type RecipeIngredientInput = {
   quantity: number | null;
   unit: string | null;
   note: string | null;
+  /** Section heading ("Massa", "Recheio"); null/absent = no heading. See lib/ingredient-groups.ts. */
+  group?: string | null;
   /** Draft-only (SPEC §4.6/4.6b): true when a quantity was estimated rather than read verbatim. */
   inferred?: boolean;
 };

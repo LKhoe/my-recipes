@@ -236,6 +236,9 @@ export const recipeIngredient = pgTable(
     quantity: numeric("quantity", { precision: 10, scale: 3 }),
     unit: text("unit"),
     note: text("note"),
+    // Section heading ("Massa", "Recheio") for multi-part recipes; null = no heading. A section is
+    // a run of consecutive rows (by `order`) sharing the same label.
+    group: text("group_name"),
     order: integer("order").notNull().default(0),
   },
   (table) => [

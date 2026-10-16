@@ -3,6 +3,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { user } from "@/lib/db/schema";
 import { createRecipe, getRecipeById, listRecipes } from "./recipe";
+import { generateShoppingList, getLatestShoppingList } from "./shopping-list";
 
 // Integration test — hits the real dev database (per this project's convention: verify against
 // real data, not just mocks). Requires `docker compose up -d postgres` and a migrated DATABASE_URL,
@@ -88,5 +89,56 @@ describe("listRecipes accent-insensitive search", () => {
     const results = await listRecipes({ q: withoutAccent });
 
     expect(results.some((r) => r.title === uniqueTitle)).toBe(true);
+  });
+});
+
+describe("ingredient sections", () => {
+  const testEmail = `ingredient-sections-test-${Date.now()}@example.com`;
+  let userId: string;
+
+  afterAll(async () => {
+    if (userId) await db.delete(user).where(eq(user.id, userId));
+  });
+
+  it("round-trips each ingredient's section, and the shopping list still merges across sections", async () => {
+    const [created] = await db
+      .insert(user)
+      .values({ email: testEmail, name: "Ingredient Sections Test" })
+      .returning({ id: user.id });
+    userId = created.id;
+
+    const { id: recipeId } = await createRecipe(userId, {
+      title: "Risoto com caldo caseiro",
+      description: null,
+      servings: 4,
+      prepTime: null,
+      cookTime: null,
+      steps: [{ text: "Faça o caldo." }, { text: "Faça o risoto." }],
+      ingredients: [
+        { ingredientName: "cebola", quantity: 1, unit: "unidade", note: null, group: "CALDO:" },
+        { ingredientName: "cenoura", quantity: 1, unit: "unidade", note: null, group: "Caldo" },
+        { ingredientName: "cebola", quantity: 0.5, unit: "unidade", note: "picada", group: "Risoto" },
+        { ingredientName: "sal", quantity: null, unit: null, note: "a gosto", group: "  " },
+      ],
+      categoryIds: [],
+      tags: [],
+      sourceUrl: null,
+      videoUrl: null,
+    });
+
+    const recipe = await getRecipeById(recipeId);
+    expect(recipe!.ingredients.map((i) => [i.group, i.ingredientName, i.quantity])).toEqual([
+      ["Caldo", "cebola", 1],
+      ["Caldo", "cenoura", 1],
+      ["Risoto", "cebola", 0.5],
+      [null, "sal", null],
+    ]);
+
+    const { id: listId } = await generateShoppingList(userId, [recipeId]);
+    const list = await getLatestShoppingList(userId);
+    expect(list!.id).toBe(listId);
+    const cebola = list!.items.filter((i) => i.name === "cebola");
+    expect(cebola).toHaveLength(1);
+    expect(cebola[0].quantity).toBe(1.5);
   });
 });

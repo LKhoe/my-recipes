@@ -1,7 +1,7 @@
 "use client";
 
-import { formatIngredientLine } from "@/lib/format";
 import { useIngredientScaling } from "@/hooks/use-ingredient-scaling";
+import { IngredientSections } from "@/components/recipes/IngredientSections";
 import { ScaleControls } from "@/components/recipes/ScaleControls";
 import type { RecipeIngredientInput } from "@/types";
 
@@ -23,16 +23,14 @@ export function ScalableIngredients({
         <h2 className="font-display text-display-sm text-foreground">Ingredientes</h2>
         <ScaleControls servings={servings} factor={factor} onAdjustServings={adjustServings} onSetFactor={setFactor} />
       </div>
-      <ul className="mt-3 flex flex-col gap-2 text-sm">
-        {ingredients.map((ingredientItem, i) => (
-          <li
-            key={`${i}-${factor}`}
-            className="animate-number-roll border-b border-border pb-2 last:border-0"
-          >
-            {formatIngredientLine(ingredientItem, factor)}
-          </li>
-        ))}
-      </ul>
+      <div className="mt-3">
+        <IngredientSections
+          ingredients={ingredients}
+          factor={factor}
+          listClassName="gap-2"
+          itemClassName="border-b border-border pb-2 last:border-0"
+        />
+      </div>
     </div>
   );
 }

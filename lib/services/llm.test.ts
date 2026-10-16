@@ -54,6 +54,47 @@ describe("extractRecipeWithLLM", () => {
     expect(draft.ingredients[1]).toMatchObject({ ingredientName: "salt", quantity: null, inferred: false });
   });
 
+  it("keeps the same ingredient once per section, with cleaned section labels", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      mockOpenRouterResponse({
+        recipeFound: true,
+        title: "Risoto de cogumelos",
+        ingredients: [
+          { ingredientName: "cebola", quantity: 1, unit: "unidade", note: null, group: "CALDO:", inferred: false },
+          { ingredientName: "cenoura", quantity: 1, unit: "unidade", note: null, group: "CALDO:", inferred: false },
+          { ingredientName: "cebola", quantity: 0.5, unit: "unidade", note: null, group: "Risoto", inferred: false },
+          { ingredientName: "sal", quantity: null, unit: null, note: "a gosto", inferred: false },
+        ],
+      }),
+    ) as unknown as typeof fetch;
+
+    const draft = await extractRecipeWithLLM("CALDO: 1 cebola, 1 cenoura. RISOTO: 1/2 cebola...", {
+      context: "youtube",
+      allowEstimation: true,
+      sourceUrl: null,
+      videoUrl: null,
+    });
+
+    expect(draft.ingredients.map((i) => [i.group, i.ingredientName, i.quantity])).toEqual([
+      ["Caldo", "cebola", 1],
+      ["Caldo", "cenoura", 1],
+      ["Risoto", "cebola", 0.5],
+      [null, "sal", null],
+    ]);
+  });
+
+  it("asks the model for sections and not to sum an ingredient across them", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockOpenRouterResponse({ recipeFound: false }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await extractRecipeWithLLM("...", { context: "webpage", allowEstimation: false, sourceUrl: null, videoUrl: null });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const systemPrompt: string = body.messages[0].content;
+    expect(systemPrompt).toContain('"group": string | null');
+    expect(systemPrompt).toContain("never add the amounts together");
+  });
+
   it("drops a unit that comes without a quantity", async () => {
     global.fetch = vi.fn().mockResolvedValue(
       mockOpenRouterResponse({

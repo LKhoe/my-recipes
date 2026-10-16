@@ -13,6 +13,7 @@ import {
   user,
 } from "@/lib/db/schema";
 import { findOrCreateIngredient } from "@/lib/services/ingredient";
+import { normalizeGroupLabel } from "@/lib/ingredient-groups";
 import { normalizeUnit } from "@/lib/services/ingredient-parser";
 import { findOrCreateTag } from "@/lib/services/tag";
 import type { RecipeDetail, RecipeInput, RecipeListItem } from "@/types";
@@ -44,6 +45,7 @@ async function replaceRecipeAssociations(
       // data arrives by — manual form free-text, LLM extraction, or JSON-LD import.
       unit: normalizeUnit(item.unit),
       note: item.note,
+      group: normalizeGroupLabel(item.group),
       order: index,
     });
   }
@@ -254,6 +256,7 @@ export async function getRecipeById(recipeId: string): Promise<RecipeDetail | nu
       quantity: recipeIngredient.quantity,
       unit: recipeIngredient.unit,
       note: recipeIngredient.note,
+      group: recipeIngredient.group,
     })
     .from(recipeIngredient)
     .innerJoin(ingredient, eq(recipeIngredient.ingredientId, ingredient.id))
@@ -289,6 +292,7 @@ export async function getRecipeById(recipeId: string): Promise<RecipeDetail | nu
       quantity: i.quantity !== null ? Number(i.quantity) : null,
       unit: i.unit,
       note: i.note,
+      group: i.group,
     })),
     categoryIds: categoryRows.map((c) => c.id),
     tags: tagRows.map((t) => t.name),

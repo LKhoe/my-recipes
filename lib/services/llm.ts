@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeGroupLabel } from "@/lib/ingredient-groups";
 import type { RecipeDraft } from "@/types";
 
 const DEFAULT_MODEL = "google/gemini-3.1-flash-lite-20260507";
@@ -19,6 +20,7 @@ const llmIngredientSchema = z.object({
   quantity: z.number().nullable().optional(),
   unit: z.string().nullable().optional(),
   note: z.string().nullable().optional(),
+  group: z.string().nullable().optional(),
   inferred: z.boolean().optional(),
 });
 
@@ -51,7 +53,7 @@ function buildSystemPrompt(context: ExtractionContext, allowEstimation: boolean)
   "prepTime": number | null,
   "cookTime": number | null,
   "steps": [{ "text": string, "durationMinutes": number | null }],
-  "ingredients": [{ "ingredientName": string, "quantity": number | null, "unit": string | null, "note": string | null, "inferred": boolean }]
+  "ingredients": [{ "ingredientName": string, "quantity": number | null, "unit": string | null, "note": string | null, "group": string | null, "inferred": boolean }]
 }
 
 Rules:
@@ -60,6 +62,7 @@ Rules:
 - "title" is the dish's name in sentence case: capitalize only the first word and proper nouns (e.g. "Coração de boi acebolado", never "CORAÇÃO DE BOI ACEBOLADO" or "Coração De Boi Acebolado"), with no channel name, emojis or hashtags.
 - Split every ingredient line into "ingredientName" (bare noun), "quantity" (a plain decimal number), "unit" (metric or a common Brazilian Portuguese cooking-unit token: g, kg, ml, l, xíc, csp, csb, cch, dente, pitada, fatia, lata, maço, ramo, pacote, tablete, unidade), and "note" (prep detail like "picado", "derretida", "a gosto" — or null; never "inferred" or "estimado", that goes in the "inferred" field). Normalize the unit to one of those tokens even if the source spells it out differently: "colher de sopa" -> "csp", "colher de sobremesa" or "colherinha de sobremesa" -> "csb", "colher de chá" or "colherinha" -> "cch", "xícara" -> "xíc".
 - "quantity" and "unit" come as a pair: both set, or both null. Never return a quantity without a unit or a unit without a quantity. Whole items counted by number (ovos, cebolas, tomates, limões) take the unit "unidade". An ingredient with no amount (one the rule below doesn't have you estimate) gets null for both, with "a gosto" in "note" only when the source says so.
+- "group" names the part of the recipe an ingredient belongs to, when the source splits the ingredients into parts (e.g. "CALDO:", "Para a massa", "Recheio", "Molho"): the part's short name in sentence case ("Caldo", "Massa", "Recheio"), the same on every ingredient of that part, with the ingredients listed in the source's order, part by part. When an ingredient appears in more than one part, list it once per part with that part's own quantity; never add the amounts together (1 cebola in "Caldo" and 1/2 cebola in "Risoto" stay two entries, not "1.5 cebola"). A recipe with a single ingredient list gets null on every ingredient.
 - prepTime/cookTime are total minutes as a number, only if explicitly stated; otherwise null.
 - "durationMinutes" on a step is a number only when that step states a specific duration of active cooking someone would time (e.g. "bake for 25 minutes" -> 25), at most ${MAX_STEP_DURATION_MINUTES}; otherwise null. Long waits (resting overnight, marinating for hours, fermenting for days) get null, with the time kept in the step text.
 - "servings" is a plain integer if stated (e.g. "serves 4-6" -> 4); otherwise null.
@@ -197,6 +200,7 @@ export async function extractRecipeWithLLM(
       // A unit with no quantity ("pitada" of nothing) can't be scaled or merged on a shopping list.
       unit: i.quantity != null ? (i.unit ?? null) : null,
       note: cleanIngredientNote(i.note),
+      group: normalizeGroupLabel(i.group),
       // Nothing was estimated when there is no quantity.
       inferred: i.quantity != null && (i.inferred ?? false),
     })),

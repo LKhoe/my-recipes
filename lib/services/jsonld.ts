@@ -1,4 +1,5 @@
 import { parseIso8601DurationToMinutes } from "@/lib/services/duration";
+import { normalizeGroupLabel } from "@/lib/ingredient-groups";
 import { parseIngredientLine } from "@/lib/services/ingredient-parser";
 import type { RecipeDraft, RecipeStep } from "@/types";
 
@@ -113,15 +114,27 @@ export function jsonLdNodeToDraft(node: JsonLdNode, sourceUrl: string): RecipeDr
 
   if (rawIngredients.length === 0 && steps.length === 0) return null;
 
-  const ingredients = rawIngredients.map((line) => {
+  // schema.org's recipeIngredient is a flat list of strings with no sections, but many sites put
+  // a part's heading in it as its own line ("Para o molho:"). Such a line names the section of the
+  // lines after it instead of becoming an ingredient.
+  let group: string | null = null;
+  const ingredients = rawIngredients.flatMap((line) => {
+    const heading = line.trim().match(/^([^\d]{1,50}):$/);
+    if (heading) {
+      group = normalizeGroupLabel(heading[1]);
+      return [];
+    }
     const parsed = parseIngredientLine(line);
-    return {
-      ingredientName: parsed.name,
-      quantity: parsed.quantity,
-      unit: parsed.unit,
-      note: parsed.note,
-      inferred: false,
-    };
+    return [
+      {
+        ingredientName: parsed.name,
+        quantity: parsed.quantity,
+        unit: parsed.unit,
+        note: parsed.note,
+        group,
+        inferred: false,
+      },
+    ];
   });
 
   return {
