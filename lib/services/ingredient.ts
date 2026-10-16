@@ -31,9 +31,10 @@ function singularizeWord(word: string): string {
 
 // SPEC §4.5a: "normalize the name (lowercase, trim, singularize)". Only the last word is
 // singularized so multi-word names like "chicken breasts" canonicalize as "chicken breast"
-// rather than mangling earlier words.
+// rather than mangling earlier words. Hyphens count as spaces, so "pimenta-do-reino" and
+// "pimenta do reino" are one ingredient.
 export function normalizeIngredientName(raw: string): string {
-  const collapsed = raw.trim().toLowerCase().replace(/\s+/g, " ");
+  const collapsed = raw.replace(/-/g, " ").trim().toLowerCase().replace(/\s+/g, " ");
   const words = collapsed.split(" ");
   words[words.length - 1] = singularizeWord(words[words.length - 1]);
   return words.join(" ");

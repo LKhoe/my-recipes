@@ -39,21 +39,20 @@ async function importFromYouTube(url: string): Promise<RecipeDraft> {
       transcript && `Transcript:\n${transcript}`,
     ].filter(Boolean);
 
-    try {
-      const draft = await extractRecipeWithLLM(sections.join("\n\n"), {
-        context: "youtube",
-        allowEstimation: true,
-        sourceUrl: url,
-        videoUrl: url,
-        imageUrl: metadata?.thumbnailUrl ?? null,
-      });
-      // The prompt asks for a sentence-case title, but the model sometimes copies an all-caps video
-      // title as-is.
-      if (draft.recipeFound) return { ...draft, title: cleanVideoTitle(draft.title || metadata?.title || "") };
-      console.warn(`[import] ${videoId}: no recipe in the video's description or transcript`);
-    } catch (err) {
-      console.error(`[import] ${videoId}: LLM extraction failed:`, err);
-    }
+    // An LLMExtractionError (OpenRouter down, out of credits, bad JSON) propagates: the route
+    // reports it as a failed import. Only the model's own "no recipe" answer falls back to manual
+    // entry, or the user is told the video has no recipe when it was never read.
+    const draft = await extractRecipeWithLLM(sections.join("\n\n"), {
+      context: "youtube",
+      allowEstimation: true,
+      sourceUrl: url,
+      videoUrl: url,
+      imageUrl: metadata?.thumbnailUrl ?? null,
+    });
+    // The prompt asks for a sentence-case title, but the model sometimes copies an all-caps video
+    // title as-is.
+    if (draft.recipeFound) return { ...draft, title: cleanVideoTitle(draft.title || metadata?.title || "") };
+    console.warn(`[import] ${videoId}: no recipe in the video's description or transcript`);
   } else {
     console.warn(`[import] ${videoId}: neither a description nor a transcript is available`);
   }

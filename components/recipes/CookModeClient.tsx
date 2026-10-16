@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { X, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Play, Pause, RotateCcw, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatIngredientLine } from "@/lib/format";
+import { formatCountdown, formatIngredientLine } from "@/lib/format";
 import { useIngredientScaling } from "@/hooks/use-ingredient-scaling";
 import { ScaleControls } from "@/components/recipes/ScaleControls";
 import type { RecipeIngredientInput, RecipeStep } from "@/types";
@@ -32,8 +32,6 @@ function StepTimer({ stepIndex, durationMinutes }: { stepIndex: number; duration
     return () => clearInterval(interval);
   }, [running, stepIndex]);
 
-  const minutes = Math.floor(remaining / 60);
-  const seconds = remaining % 60;
   const done = remaining === 0;
   const total = durationMinutes * 60;
 
@@ -64,8 +62,10 @@ function StepTimer({ stepIndex, durationMinutes }: { stepIndex: number; duration
             className="stroke-primary transition-[stroke-dashoffset] duration-1000 ease-linear"
           />
         </svg>
-        <span className={cn("font-display text-xl tabular-nums", done && "text-primary")}>
-          {minutes}:{seconds.toString().padStart(2, "0")}
+        <span
+          className={cn("font-display tabular-nums", total >= 3600 ? "text-base" : "text-xl", done && "text-primary")}
+        >
+          {formatCountdown(remaining)}
         </span>
       </div>
       <div className="flex items-center gap-3">

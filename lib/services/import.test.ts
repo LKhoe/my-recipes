@@ -24,7 +24,7 @@ vi.mock("./youtube", () => ({
 
 import { fetchPageHtml, stripToReadableText } from "./html-fetch";
 import { extractRecipeFromJsonLd } from "./jsonld";
-import { extractRecipeWithLLM } from "./llm";
+import { extractRecipeWithLLM, LLMExtractionError } from "./llm";
 import { fetchTranscriptText, fetchVideoMetadata, isYouTubeUrl, parseYouTubeVideoId } from "./youtube";
 import { importRecipeFromUrl } from "./import";
 import type { RecipeDraft } from "@/types";
@@ -163,18 +163,15 @@ describe("importRecipeFromUrl", () => {
     expect(draft.imageUrl).toBe("https://img.example.com/thumb.jpg");
   });
 
-  it("signals manual entry instead of failing when the LLM call throws", async () => {
+  it("lets an LLM failure propagate instead of reporting that the video has no recipe", async () => {
     vi.mocked(isYouTubeUrl).mockReturnValue(true);
     vi.mocked(parseYouTubeVideoId).mockReturnValue("abc123");
     vi.mocked(fetchVideoMetadata).mockResolvedValue({ title: "Tomato Pasta", description: "", thumbnailUrl: null });
     vi.mocked(fetchTranscriptText).mockResolvedValue("hey everyone...");
-    vi.mocked(extractRecipeWithLLM).mockRejectedValue(new Error("OpenRouter is down"));
-    vi.spyOn(console, "error").mockImplementation(() => {});
+    const error = new LLMExtractionError("OpenRouter request failed (402): insufficient credits");
+    vi.mocked(extractRecipeWithLLM).mockRejectedValue(error);
 
-    const draft = await importRecipeFromUrl("https://youtu.be/abc123");
-
-    expect(draft.recipeFound).toBe(false);
-    expect(draft.title).toBe("Tomato Pasta");
+    await expect(importRecipeFromUrl("https://youtu.be/abc123")).rejects.toBe(error);
   });
 
   it("skips the LLM when there is neither a description nor a transcript", async () => {

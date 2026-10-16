@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatIngredientLine } from "./format";
+import { formatCountdown, formatIngredientLine } from "./format";
 
 describe("formatIngredientLine", () => {
   it("formats an unscaled ingredient line with unit and note", () => {
@@ -25,5 +25,19 @@ describe("formatIngredientLine", () => {
     expect(formatIngredientLine({ quantity: 3, unit: "unidade", ingredientName: "limão", note: null })).toBe(
       "3 unidade limão",
     );
+  });
+});
+
+describe("formatCountdown", () => {
+  it("shows minutes and seconds under an hour", () => {
+    expect(formatCountdown(25 * 60)).toBe("25:00");
+    expect(formatCountdown(65)).toBe("1:05");
+    expect(formatCountdown(0)).toBe("0:00");
+  });
+
+  it("shows hours as h:mm:ss from one hour up", () => {
+    expect(formatCountdown(3600)).toBe("1:00:00");
+    expect(formatCountdown(90 * 60 + 5)).toBe("1:30:05");
+    expect(formatCountdown(20160 * 60)).toBe("336:00:00");
   });
 });

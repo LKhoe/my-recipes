@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { extractRecipeWithLLM, LLMExtractionError } from "./llm";
+import { cleanIngredientNote, extractRecipeWithLLM, LLMExtractionError } from "./llm";
 
 function mockOpenRouterResponse(content: unknown) {
   return {
@@ -73,6 +73,72 @@ describe("extractRecipeWithLLM", () => {
     expect(draft.ingredients[0]).toMatchObject({ quantity: null, unit: null, note: "a gosto" });
   });
 
+  it("cleans estimate markers out of notes and clears inferred when there is no quantity", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      mockOpenRouterResponse({
+        recipeFound: true,
+        title: "Vinagrete",
+        ingredients: [
+          { ingredientName: "cebola", quantity: 1, unit: "unidade", note: "picada, inferred", inferred: true },
+          { ingredientName: "azeite", quantity: 2, unit: "csp", note: "(estimado)", inferred: true },
+          { ingredientName: "sal", quantity: null, unit: null, note: "a gosto", inferred: true },
+        ],
+      }),
+    ) as unknown as typeof fetch;
+
+    const draft = await extractRecipeWithLLM("oi gente...", {
+      context: "youtube",
+      allowEstimation: true,
+      sourceUrl: null,
+      videoUrl: null,
+    });
+
+    expect(draft.ingredients[0]).toMatchObject({ note: "picada", inferred: true });
+    expect(draft.ingredients[1]).toMatchObject({ note: null, inferred: true });
+    expect(draft.ingredients[2]).toMatchObject({ note: "a gosto", inferred: false });
+  });
+
+  it("drops step durations that are waits rather than timers", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      mockOpenRouterResponse({
+        recipeFound: true,
+        title: "Kimchi",
+        steps: [
+          { text: "Misture tudo.", durationMinutes: 5 },
+          { text: "Asse por 3 horas.", durationMinutes: 180 },
+          { text: "Deixe na geladeira por 20 horas.", durationMinutes: 1200 },
+          { text: "Fermente por 14 dias.", durationMinutes: 20160 },
+          { text: "Sirva.", durationMinutes: 0 },
+        ],
+      }),
+    ) as unknown as typeof fetch;
+
+    const draft = await extractRecipeWithLLM("...", {
+      context: "youtube",
+      allowEstimation: true,
+      sourceUrl: null,
+      videoUrl: null,
+    });
+
+    expect(draft.steps.map((s) => s.durationMinutes)).toEqual([5, 180, undefined, undefined, undefined]);
+  });
+
+  it("asks for Brazilian Portuguese and caps step timers in the prompt", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockOpenRouterResponse({ recipeFound: false }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await extractRecipeWithLLM("Title: Kimchi\n\nDescription:\nIngredients...", {
+      context: "youtube",
+      allowEstimation: true,
+      sourceUrl: null,
+      videoUrl: null,
+    });
+
+    const systemPrompt: string = JSON.parse(fetchMock.mock.calls[0][1].body).messages[0].content;
+    expect(systemPrompt).toContain("Brazilian Portuguese, translating");
+    expect(systemPrompt).toContain("at most 180");
+  });
+
   it("reports recipeFound: false without throwing when no recipe is present", async () => {
     global.fetch = vi.fn().mockResolvedValue(mockOpenRouterResponse({ recipeFound: false })) as unknown as typeof fetch;
 
@@ -95,6 +161,19 @@ describe("extractRecipeWithLLM", () => {
         context: "webpage",
         allowEstimation: false,
         sourceUrl: "https://example.com",
+        videoUrl: null,
+      }),
+    ).rejects.toThrow(LLMExtractionError);
+  });
+
+  it("throws LLMExtractionError when OpenRouter can't be reached", async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError("fetch failed")) as unknown as typeof fetch;
+
+    await expect(
+      extractRecipeWithLLM("text", {
+        context: "youtube",
+        allowEstimation: true,
+        sourceUrl: null,
         videoUrl: null,
       }),
     ).rejects.toThrow(LLMExtractionError);
@@ -127,5 +206,21 @@ describe("extractRecipeWithLLM", () => {
         videoUrl: null,
       }),
     ).rejects.toThrow(LLMExtractionError);
+  });
+});
+
+describe("cleanIngredientNote", () => {
+  it.each([
+    ["picada, inferred", "picada"],
+    ["inferred", null],
+    ["picada (estimado)", "picada"],
+    ["quantidade estimada, picada", "picada"],
+    ["Estimated; finely chopped", "finely chopped"],
+    ["picada, em cubos", "picada, em cubos"],
+    ["a gosto", "a gosto"],
+    ["", null],
+    [null, null],
+  ])("%j -> %j", (input, expected) => {
+    expect(cleanIngredientNote(input)).toBe(expected);
   });
 });

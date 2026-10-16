@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: err.message }, { status: 422 });
     }
     if (err instanceof LLMExtractionError) {
+      console.error("Recipe import: LLM extraction failed:", err.message);
       return NextResponse.json({ error: `Não foi possível extrair uma receita: ${err.message}` }, { status: 502 });
     }
     console.error("Recipe import failed:", err);

@@ -1009,3 +1009,38 @@ below.
 - **Manual-entry fallback says why.** `NewRecipeClient` shows a short pt-BR notice above the form
   ("Não encontramos uma receita neste vídeo…"; "nesta página" for a webpage), as SPEC §4.6b step 3
   already asked for.
+
+## 2026-10-16 — YouTube import batch run (57 videos)
+
+- **An LLM failure is an import error, not "no recipe".** `importFromYouTube` used to catch every
+  extraction error and fall back to manual entry, so an OpenRouter 402 (out of credits) told the
+  user "Não encontramos uma receita neste vídeo". `LLMExtractionError` now propagates and the
+  route answers 502 with the reason (and logs it). Manual entry is only for the model's own
+  `recipeFound: false` or a video with neither description nor transcript. A network failure
+  reaching OpenRouter is wrapped in `LLMExtractionError` too, so it isn't a generic 500.
+
+- **Everything in Brazilian Portuguese.** An English-description video came back with Portuguese
+  ingredients and English steps. The prompt now asks for every text field in pt-BR, translating
+  if needed; the title rule no longer says "in the recipe's own language".
+
+- **Step timers stop at 3 hours** (`MAX_STEP_DURATION_MINUTES = 180`). The model turned "14 days
+  of fermentation" into `durationMinutes: 20160`, shown in cook mode as a "20160:00" countdown.
+  The prompt keeps `durationMinutes` to active steps someone would time, and
+  `extractRecipeWithLLM` drops values above the cap (or ≤ 0); the wait stays in the step text.
+  3 hours covers long braises and bakes. `StepTimer` shows `h:mm:ss` from one hour up
+  (`formatCountdown` in `lib/format.ts`), which also fixes old recipes that already hold big values.
+
+- **"inferred"/"estimado" are stripped from notes** (`cleanIngredientNote`): the model sometimes
+  wrote its estimate flag into the note ("picada, inferred"). `inferred` is forced to `false` when
+  there is no quantity, since nothing was estimated.
+
+- **Hyphens count as spaces in ingredient names**, so "pimenta-do-reino" / "pimenta do reino" and
+  "cheiro-verde" / "cheiro verde" are one `ingredient` row and merge on shopping lists. The stored
+  (and displayed) name is the hyphen-free form, which drops the official hyphenated spelling;
+  accepted, since one row matters more for merging than the hyphen. **Existing rows need a data
+  migration:** an ingredient saved before this keeps its hyphenated name, and saving a recipe now
+  looks up the hyphen-free name, so it creates a second row and the two don't merge on a shopping
+  list. The migration would, per hyphenated name, repoint `recipe_ingredient` and
+  `shopping_list_item` to the hyphen-free row (renaming the hyphenated row when there is none) and
+  delete the leftover. Not written yet. Find affected rows with
+  `select name from ingredient where name like '%-%'`.

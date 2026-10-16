@@ -16,3 +16,11 @@ export function formatIngredientLine(
   const base = parts.join(" ");
   return item.note ? `${base} (${item.note})` : base;
 }
+
+/** A countdown as m:ss, or h:mm:ss from one hour up (so 90 minutes reads 1:30:00, not 90:00). */
+export function formatCountdown(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return hours > 0 ? `${hours}:${String(minutes).padStart(2, "0")}:${seconds}` : `${minutes}:${seconds}`;
+}
