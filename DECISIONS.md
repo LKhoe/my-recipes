@@ -1088,8 +1088,12 @@ Multi-part recipes lost their structure on import: a risotto with "CALDO: 1 cebo
   (`LLM_BASE_URL`, `LLM_API_KEY` from `provision-app.sh --llm`), which holds the only OpenRouter
   key, picks the model and enforces this app's limits on paid calls (monthly budget, calls per day).
   The old default `google/gemini-3.1-flash-lite-20260507` had also left OpenRouter's catalog.
-- **Tier `medium` for extraction** (cheap paid models, `LLM_TIER` overrides it). `simple` would
-  be free, but its fallback is a 1B local model on the Pi, too weak for a full recipe in JSON.
+- **The user picks the tier on each import, `simple` by default** (free; was `medium` with an
+  `LLM_TIER` override at first). The import box offers Simples (grátis) / Médio (barato) /
+  Avançado; the choice only matters when the page has no JSON-LD. Caveat of `simple`: when the
+  free models fail, the gateway's fallback is a 1B local model on the Pi, slow (~3 tokens/s) and
+  weak at a full recipe in JSON, so such an import can take minutes and fail. Médio is the
+  reliable choice for a hard page.
 - **A limit reached is its own message** ("o limite de uso da IA foi atingido"), so the import
   error says why instead of showing the gateway's 429 body. `max_tokens: 4096` stays: the gateway
   caps it anyway, but a recipe never needs more.

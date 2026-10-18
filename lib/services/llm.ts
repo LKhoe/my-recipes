@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { normalizeGroupLabel } from "@/lib/ingredient-groups";
+import { DEFAULT_LLM_TIER, type LLMTier } from "@/lib/llm-tiers";
 import type { RecipeDraft } from "@/types";
 
-// LocalInfra's LLM gateway picks the model: the app only asks for a tier. Extraction is
-// structured JSON from long, messy text, so "medium" (cheap paid models) by default.
-const DEFAULT_TIER = "medium";
+// LocalInfra's LLM gateway picks the model: the app only asks for a tier (lib/llm-tiers.ts),
+// which the user chooses on import.
 
 export class LLMExtractionError extends Error {}
 
@@ -110,6 +110,7 @@ export async function extractRecipeWithLLM(
     sourceUrl: string | null;
     videoUrl: string | null;
     imageUrl?: string | null;
+    tier?: LLMTier;
   },
 ): Promise<RecipeDraft> {
   const baseUrl = process.env.LLM_BASE_URL;
@@ -127,7 +128,7 @@ export async function extractRecipeWithLLM(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: process.env.LLM_TIER || DEFAULT_TIER,
+        model: opts.tier ?? DEFAULT_LLM_TIER,
         temperature: 0.2,
         max_tokens: 4096,
         response_format: { type: "json_object" },

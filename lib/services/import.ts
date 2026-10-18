@@ -1,11 +1,12 @@
 import { fetchPageHtml, stripToReadableText } from "@/lib/services/html-fetch";
 import { extractRecipeFromJsonLd } from "@/lib/services/jsonld";
+import type { LLMTier } from "@/lib/llm-tiers";
 import { extractRecipeWithLLM } from "@/lib/services/llm";
 import { fetchTranscriptText, fetchVideoMetadata, isYouTubeUrl, parseYouTubeVideoId } from "@/lib/services/youtube";
 import { cleanVideoTitle } from "@/lib/youtube-utils";
 import type { RecipeDraft } from "@/types";
 
-async function importFromWebpage(url: string): Promise<RecipeDraft> {
+async function importFromWebpage(url: string, tier?: LLMTier): Promise<RecipeDraft> {
   const html = await fetchPageHtml(url);
 
   // SPEC §4.6: JSON-LD first (deterministic, free, instant) — expected to cover most sites.
@@ -19,10 +20,11 @@ async function importFromWebpage(url: string): Promise<RecipeDraft> {
     allowEstimation: false,
     sourceUrl: url,
     videoUrl: null,
+    tier,
   });
 }
 
-async function importFromYouTube(url: string): Promise<RecipeDraft> {
+async function importFromYouTube(url: string, tier?: LLMTier): Promise<RecipeDraft> {
   const videoId = parseYouTubeVideoId(url);
   if (!videoId) {
     throw new Error("Could not parse a video id from that YouTube URL.");
@@ -48,6 +50,7 @@ async function importFromYouTube(url: string): Promise<RecipeDraft> {
       sourceUrl: url,
       videoUrl: url,
       imageUrl: metadata?.thumbnailUrl ?? null,
+      tier,
     });
     // The prompt asks for a sentence-case title, but the model sometimes copies an all-caps video
     // title as-is.
@@ -73,7 +76,8 @@ async function importFromYouTube(url: string): Promise<RecipeDraft> {
   };
 }
 
-export async function importRecipeFromUrl(url: string): Promise<RecipeDraft> {
-  if (isYouTubeUrl(url)) return importFromYouTube(url);
-  return importFromWebpage(url);
+// tier: which LLM tier reads the page when it has no JSON-LD (the user's choice on import)
+export async function importRecipeFromUrl(url: string, opts: { tier?: LLMTier } = {}): Promise<RecipeDraft> {
+  if (isYouTubeUrl(url)) return importFromYouTube(url, opts.tier);
+  return importFromWebpage(url, opts.tier);
 }

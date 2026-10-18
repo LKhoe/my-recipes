@@ -75,6 +75,21 @@ describe("importRecipeFromUrl", () => {
     );
   });
 
+  it("passes the chosen LLM tier on, for webpages and videos", async () => {
+    vi.mocked(fetchPageHtml).mockResolvedValue("<html>no structured data</html>");
+    vi.mocked(extractRecipeFromJsonLd).mockReturnValue(null);
+    vi.mocked(extractRecipeWithLLM).mockResolvedValue(foundDraft);
+    await importRecipeFromUrl("https://example.com/blog-post", { tier: "medium" });
+    expect(extractRecipeWithLLM).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ tier: "medium" }));
+
+    vi.mocked(isYouTubeUrl).mockReturnValue(true);
+    vi.mocked(parseYouTubeVideoId).mockReturnValue("abc123");
+    vi.mocked(fetchVideoMetadata).mockResolvedValue({ title: "T", description: "d", thumbnailUrl: null });
+    vi.mocked(fetchTranscriptText).mockResolvedValue("transcript");
+    await importRecipeFromUrl("https://youtu.be/abc123", { tier: "hard" });
+    expect(extractRecipeWithLLM).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ tier: "hard" }));
+  });
+
   it("sends the title, description and transcript together in one LLM call", async () => {
     vi.mocked(isYouTubeUrl).mockReturnValue(true);
     vi.mocked(parseYouTubeVideoId).mockReturnValue("abc123");

@@ -5,12 +5,13 @@ import { auth } from "@/lib/auth";
 import { checkImportRateLimit } from "@/lib/rate-limit";
 import { importRecipeFromUrl } from "@/lib/services/import";
 import { PageFetchError } from "@/lib/services/html-fetch";
+import { DEFAULT_LLM_TIER, LLM_TIERS } from "@/lib/llm-tiers";
 import { LLMExtractionError } from "@/lib/services/llm";
 
 // LLM extraction can take 30-60s (SPEC §4.6 operational constraints).
 export const maxDuration = 60;
 
-const bodySchema = z.object({ url: z.string().url() });
+const bodySchema = z.object({ url: z.string().url(), tier: z.enum(LLM_TIERS).default(DEFAULT_LLM_TIER) });
 
 export async function POST(request: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const draft = await importRecipeFromUrl(parsedBody.data.url);
+    const draft = await importRecipeFromUrl(parsedBody.data.url, { tier: parsedBody.data.tier });
     return NextResponse.json(draft);
   } catch (err) {
     if (err instanceof PageFetchError) {

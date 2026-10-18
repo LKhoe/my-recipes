@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
+import { DEFAULT_LLM_TIER, LLM_TIER_LABELS, LLM_TIERS, type LLMTier } from "@/lib/llm-tiers";
+import { cn } from "@/lib/utils";
 import type { RecipeDraft } from "@/types";
 
 // Cross-faded status copy while an import is in flight — roughly matches the real pipeline
@@ -20,6 +22,7 @@ const IMPORT_PHASES = [
 
 export function ImportBox({ onImported }: { onImported: (draft: RecipeDraft) => void }) {
   const [url, setUrl] = useState("");
+  const [tier, setTier] = useState<LLMTier>(DEFAULT_LLM_TIER);
   const [loading, setLoading] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +46,7 @@ export function ImportBox({ onImported }: { onImported: (draft: RecipeDraft) => 
       const res = await fetch("/api/recipes/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, tier }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.error ?? "Falha na importação.");
@@ -77,6 +80,31 @@ export function ImportBox({ onImported }: { onImported: (draft: RecipeDraft) => 
             "Importar"
           )}
         </Button>
+      </div>
+      {/* Only used when the page has no structured recipe data and the AI has to read it */}
+      <div className="flex flex-col gap-1.5">
+        <span id="import-tier-label" className="text-xs text-muted-foreground">
+          IA para ler a página, quando ela não traz a receita estruturada
+        </span>
+        <div role="radiogroup" aria-labelledby="import-tier-label" className="flex flex-wrap gap-2">
+          {LLM_TIERS.map((t) => (
+            <Button
+              key={t}
+              type="button"
+              role="radio"
+              aria-checked={tier === t}
+              size="sm"
+              variant={tier === t ? "default" : "outline"}
+              disabled={loading}
+              onClick={() => setTier(t)}
+            >
+              {LLM_TIER_LABELS[t].label}
+              <span className={cn("text-xs", tier === t ? "opacity-80" : "text-muted-foreground")}>
+                {LLM_TIER_LABELS[t].hint}
+              </span>
+            </Button>
+          ))}
+        </div>
       </div>
       {loading && (
         <div className="flex flex-col gap-1.5">

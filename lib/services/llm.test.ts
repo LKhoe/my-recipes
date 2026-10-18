@@ -208,7 +208,7 @@ describe("extractRecipeWithLLM", () => {
     ).rejects.toThrow(LLMExtractionError);
   });
 
-  it("calls the LocalInfra gateway with its key and the medium tier", async () => {
+  it("calls the LocalInfra gateway with its key, on the simple tier unless told otherwise", async () => {
     const fetchMock = vi.fn().mockResolvedValue(mockLLMResponse({ recipeFound: false }));
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -217,7 +217,10 @@ describe("extractRecipeWithLLM", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("http://localinfra-llm:4000/v1/chat/completions");
     expect(init.headers.Authorization).toBe("Bearer llm_test");
-    expect(JSON.parse(init.body).model).toBe("medium");
+    expect(JSON.parse(init.body).model).toBe("simple");
+
+    await extractRecipeWithLLM("text", { context: "webpage", allowEstimation: false, sourceUrl: null, videoUrl: null, tier: "hard" });
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).model).toBe("hard");
   });
 
   it("explains in Portuguese when the gateway's limit on paid calls is reached", async () => {

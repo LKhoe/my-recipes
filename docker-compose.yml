@@ -42,7 +42,6 @@ services:
       # LLM import fallback — LocalInfra's LLM gateway (provision-app.sh --llm)
       - LLM_BASE_URL=${LLM_BASE_URL:-http://localinfra-llm:4000/v1}
       - LLM_API_KEY=${LLM_API_KEY}
-      - LLM_TIER=${LLM_TIER:-medium}
       # YouTube import
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
       # Alexa API surface (SPEC §9.1) — shared-secret token, no device pairing in v1
