@@ -1,5 +1,5 @@
 # My Recipes — app only.
-# Postgres and photo storage (S3, Garage) come from the LocalInfra project (../LocalInfra):
+# Postgres, photo storage (S3, Garage) and the LLM gateway come from the LocalInfra project (../LocalInfra):
 # start it first, then provision this app once with
 #   LocalInfra/scripts/new-project.sh my_recipes --no-redis --s3
 # and copy the printed variables into this project's .env. See DEPLOY.md.
@@ -39,9 +39,10 @@ services:
       # Google OAuth
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      # LLM import fallback (OpenRouter)
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - OPENROUTER_MODEL=${OPENROUTER_MODEL}
+      # LLM import fallback — LocalInfra's LLM gateway (provision-app.sh --llm)
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://localinfra-llm:4000/v1}
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_TIER=${LLM_TIER:-medium}
       # YouTube import
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
       # Alexa API surface (SPEC §9.1) — shared-secret token, no device pairing in v1
@@ -59,6 +60,7 @@ services:
     networks:
       - localinfra_postgres
       - localinfra_s3
+      - localinfra_llm
       # LocalInfra's Cloudflare tunnel reaches the app here: http://my-recipes:3000
       - localinfra_tunnel
     deploy:
@@ -79,6 +81,8 @@ networks:
   localinfra_postgres:
     external: true
   localinfra_s3:
+    external: true
+  localinfra_llm:
     external: true
   localinfra_tunnel:
     external: true

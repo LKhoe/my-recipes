@@ -54,8 +54,8 @@ redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`). Email/password work
 | `PORT` | no | Host port on the Pi, default `3001` (yarg owns `3000`) |
 | `TZ` | no | Server timezone, default `America/Sao_Paulo` — decides "today" for the meal plan |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | Enables Google sign-in |
-| `OPENROUTER_API_KEY` | no (Phase 1+) | LLM import fallback |
-| `OPENROUTER_MODEL` | no | Overrides the default import model |
+| `LLM_BASE_URL` / `LLM_API_KEY` | no (Phase 1+) | LLM import fallback, through LocalInfra's LLM gateway (`provision-app.sh ... --llm`) |
+| `LLM_TIER` | no | Gateway tier for imports: `simple` (free), `medium` (default), `hard` |
 | `YOUTUBE_API_KEY` | no (Phase 1+) | YouTube description fetch; transcripts need no key |
 | `ALEXA_API_TOKEN` | no (Phase 4+) | Shared-secret bearer token for `/api/alexa/*` |
 

@@ -1081,3 +1081,15 @@ Multi-part recipes lost their structure on import: a risotto with "CALDO: 1 cebo
   in an input, its own "Adicionar ingrediente" and a "Remover seção" that keeps the ingredients
   (they join the section above). "Adicionar seção" starts a new one at the end. There's no
   drag-to-move between sections; delete and re-add a row to move it.
+
+## LLM calls through LocalInfra's gateway
+
+- **No OpenRouter key in the app any more.** The import fallback calls LocalInfra's LLM gateway
+  (`LLM_BASE_URL`, `LLM_API_KEY` from `provision-app.sh --llm`), which holds the only OpenRouter
+  key, picks the model and enforces this app's limits on paid calls (monthly budget, calls per day).
+  The old default `google/gemini-3.1-flash-lite-20260507` had also left OpenRouter's catalog.
+- **Tier `medium` for extraction** (cheap paid models, `LLM_TIER` overrides it). `simple` would
+  be free, but its fallback is a 1B local model on the Pi, too weak for a full recipe in JSON.
+- **A limit reached is its own message** ("o limite de uso da IA foi atingido"), so the import
+  error says why instead of showing the gateway's 429 body. `max_tokens: 4096` stays: the gateway
+  caps it anyway, but a recipe never needs more.

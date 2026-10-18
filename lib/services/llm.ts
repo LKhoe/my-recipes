@@ -2,7 +2,9 @@ import { z } from "zod";
 import { normalizeGroupLabel } from "@/lib/ingredient-groups";
 import type { RecipeDraft } from "@/types";
 
-const DEFAULT_MODEL = "google/gemini-3.1-flash-lite-20260507";
+// LocalInfra's LLM gateway picks the model: the app only asks for a tier. Extraction is
+// structured JSON from long, messy text, so "medium" (cheap paid models) by default.
+const DEFAULT_TIER = "medium";
 
 export class LLMExtractionError extends Error {}
 
@@ -110,24 +112,22 @@ export async function extractRecipeWithLLM(
     imageUrl?: string | null;
   },
 ): Promise<RecipeDraft> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    throw new LLMExtractionError("OPENROUTER_API_KEY is not configured.");
+  const baseUrl = process.env.LLM_BASE_URL;
+  const apiKey = process.env.LLM_API_KEY;
+  if (!baseUrl || !apiKey) {
+    throw new LLMExtractionError("LLM_BASE_URL / LLM_API_KEY are not configured.");
   }
-
-  const model = process.env.OPENROUTER_MODEL || DEFAULT_MODEL;
 
   let res: Response;
   try {
-    res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "X-Title": "Minhas Receitas",
       },
       body: JSON.stringify({
-        model,
+        model: process.env.LLM_TIER || DEFAULT_TIER,
         temperature: 0.2,
         max_tokens: 4096,
         response_format: { type: "json_object" },
@@ -139,18 +139,24 @@ export async function extractRecipeWithLLM(
     });
   } catch (err) {
     // A network failure would otherwise surface as a generic 500 instead of an import error.
-    throw new LLMExtractionError(`OpenRouter request failed: ${(err as Error).message}`);
+    throw new LLMExtractionError(`LLM request failed: ${(err as Error).message}`);
   }
 
+  // The gateway's per-app limit on paid calls (monthly budget or calls per day)
+  if (res.status === 429) {
+    throw new LLMExtractionError(
+      "o limite de uso da IA foi atingido. Tente de novo mais tarde ou cadastre a receita à mão.",
+    );
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new LLMExtractionError(`OpenRouter request failed (${res.status}): ${body.slice(0, 300)}`);
+    throw new LLMExtractionError(`LLM request failed (${res.status}): ${body.slice(0, 300)}`);
   }
 
   const json = await res.json();
   const content: string | undefined = json?.choices?.[0]?.message?.content;
   if (!content) {
-    throw new LLMExtractionError("OpenRouter response had no message content.");
+    throw new LLMExtractionError("LLM response had no message content.");
   }
 
   let parsedJson: unknown;

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanIngredientNote, extractRecipeWithLLM, LLMExtractionError } from "./llm";
 
-function mockOpenRouterResponse(content: unknown) {
+function mockLLMResponse(content: unknown) {
   return {
     ok: true,
     json: async () => ({ choices: [{ message: { content: JSON.stringify(content) } }] }),
@@ -10,21 +10,22 @@ function mockOpenRouterResponse(content: unknown) {
 
 describe("extractRecipeWithLLM", () => {
   const originalFetch = global.fetch;
-  const originalKey = process.env.OPENROUTER_API_KEY;
+  const originalEnv = { ...process.env };
 
   beforeEach(() => {
-    process.env.OPENROUTER_API_KEY = "test-key";
+    process.env.LLM_BASE_URL = "http://localinfra-llm:4000/v1";
+    process.env.LLM_API_KEY = "llm_test";
   });
 
   afterEach(() => {
     global.fetch = originalFetch;
-    process.env.OPENROUTER_API_KEY = originalKey;
+    process.env = { ...originalEnv };
     vi.restoreAllMocks();
   });
 
   it("maps a valid response, preserving the inferred-quantity flag (SPEC §4.6b)", async () => {
     global.fetch = vi.fn().mockResolvedValue(
-      mockOpenRouterResponse({
+      mockLLMResponse({
         recipeFound: true,
         title: "Grandma's Tomato Pasta",
         description: null,
@@ -56,7 +57,7 @@ describe("extractRecipeWithLLM", () => {
 
   it("keeps the same ingredient once per section, with cleaned section labels", async () => {
     global.fetch = vi.fn().mockResolvedValue(
-      mockOpenRouterResponse({
+      mockLLMResponse({
         recipeFound: true,
         title: "Risoto de cogumelos",
         ingredients: [
@@ -84,7 +85,7 @@ describe("extractRecipeWithLLM", () => {
   });
 
   it("asks the model for sections and not to sum an ingredient across them", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(mockOpenRouterResponse({ recipeFound: false }));
+    const fetchMock = vi.fn().mockResolvedValue(mockLLMResponse({ recipeFound: false }));
     global.fetch = fetchMock as unknown as typeof fetch;
 
     await extractRecipeWithLLM("...", { context: "webpage", allowEstimation: false, sourceUrl: null, videoUrl: null });
@@ -97,7 +98,7 @@ describe("extractRecipeWithLLM", () => {
 
   it("drops a unit that comes without a quantity", async () => {
     global.fetch = vi.fn().mockResolvedValue(
-      mockOpenRouterResponse({
+      mockLLMResponse({
         recipeFound: true,
         title: "Coração de boi acebolado",
         ingredients: [{ ingredientName: "cheiro verde", quantity: null, unit: "maço", note: "a gosto", inferred: false }],
@@ -116,7 +117,7 @@ describe("extractRecipeWithLLM", () => {
 
   it("cleans estimate markers out of notes and clears inferred when there is no quantity", async () => {
     global.fetch = vi.fn().mockResolvedValue(
-      mockOpenRouterResponse({
+      mockLLMResponse({
         recipeFound: true,
         title: "Vinagrete",
         ingredients: [
@@ -141,7 +142,7 @@ describe("extractRecipeWithLLM", () => {
 
   it("drops step durations that are waits rather than timers", async () => {
     global.fetch = vi.fn().mockResolvedValue(
-      mockOpenRouterResponse({
+      mockLLMResponse({
         recipeFound: true,
         title: "Kimchi",
         steps: [
@@ -165,7 +166,7 @@ describe("extractRecipeWithLLM", () => {
   });
 
   it("asks for Brazilian Portuguese and caps step timers in the prompt", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(mockOpenRouterResponse({ recipeFound: false }));
+    const fetchMock = vi.fn().mockResolvedValue(mockLLMResponse({ recipeFound: false }));
     global.fetch = fetchMock as unknown as typeof fetch;
 
     await extractRecipeWithLLM("Title: Kimchi\n\nDescription:\nIngredients...", {
@@ -181,7 +182,7 @@ describe("extractRecipeWithLLM", () => {
   });
 
   it("reports recipeFound: false without throwing when no recipe is present", async () => {
-    global.fetch = vi.fn().mockResolvedValue(mockOpenRouterResponse({ recipeFound: false })) as unknown as typeof fetch;
+    global.fetch = vi.fn().mockResolvedValue(mockLLMResponse({ recipeFound: false })) as unknown as typeof fetch;
 
     const draft = await extractRecipeWithLLM("just a vlog about my day, no cooking", {
       context: "youtube",
@@ -207,7 +208,27 @@ describe("extractRecipeWithLLM", () => {
     ).rejects.toThrow(LLMExtractionError);
   });
 
-  it("throws LLMExtractionError when OpenRouter can't be reached", async () => {
+  it("calls the LocalInfra gateway with its key and the medium tier", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockLLMResponse({ recipeFound: false }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await extractRecipeWithLLM("text", { context: "webpage", allowEstimation: false, sourceUrl: null, videoUrl: null });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("http://localinfra-llm:4000/v1/chat/completions");
+    expect(init.headers.Authorization).toBe("Bearer llm_test");
+    expect(JSON.parse(init.body).model).toBe("medium");
+  });
+
+  it("explains in Portuguese when the gateway's limit on paid calls is reached", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 429, text: async () => "{}" }) as unknown as typeof fetch;
+
+    await expect(
+      extractRecipeWithLLM("text", { context: "webpage", allowEstimation: false, sourceUrl: null, videoUrl: null }),
+    ).rejects.toThrow(/limite de uso da IA/);
+  });
+
+  it("throws LLMExtractionError when the LLM gateway can't be reached", async () => {
     global.fetch = vi.fn().mockRejectedValue(new TypeError("fetch failed")) as unknown as typeof fetch;
 
     await expect(
@@ -236,8 +257,8 @@ describe("extractRecipeWithLLM", () => {
     ).rejects.toThrow(LLMExtractionError);
   });
 
-  it("throws when OPENROUTER_API_KEY is not configured", async () => {
-    delete process.env.OPENROUTER_API_KEY;
+  it("throws when LLM_API_KEY is not configured", async () => {
+    delete process.env.LLM_API_KEY;
 
     await expect(
       extractRecipeWithLLM("text", {
