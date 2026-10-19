@@ -22,7 +22,8 @@ the image is built and the container runs on the Pi. Nothing is cloned on the Pi
 - **Postgres** and **photo storage** (S3, on Garage) come from [LocalInfra](../LocalInfra) (start
   it first). This app has no Redis and no volumes.
 - **Photos** are objects in the private `my-recipes` bucket, on the RAID 1 drive. The bucket is
-  never exposed: `/api/uploads/...` streams them to signed-in users only.
+  never exposed: `/api/uploads/...` streams them, recipe photos to anyone and cook photos to
+  signed-in users only.
 - **Public access** goes through LocalInfra's Cloudflare tunnel (`localinfra-tunnel`) on `localinfra_tunnel`.
 - **Migrations** run on every container start (`docker-entrypoint.sh`: wait for Postgres →
   `scripts/migrate.mjs` → `scripts/seed.mjs` → start Next.js).
