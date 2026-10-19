@@ -1097,3 +1097,22 @@ Multi-part recipes lost their structure on import: a risotto with "CALDO: 1 cebo
 - **A limit reached is its own message** ("o limite de uso da IA foi atingido"), so the import
   error says why instead of showing the gateway's 429 body. `max_tokens: 4096` stays: the gateway
   caps it anyway, but a recipe never needs more.
+
+## 2026-10-18 — Public recipe browsing
+
+- **Visitors can browse and search recipes; every other feature stays behind the login.**
+  `proxy.ts`'s `isPublicPath` lets `/`, `/recipes`, `/recipes/{id}` and `/recipes/{id}/cook`
+  through without a session cookie (`/recipes/new` is excluded by name, since it has the shape of
+  a recipe id). Those pages call `getSession` instead of `requireSession`; edit and add pages, plan,
+  shopping list and settings still call `requireSession`, and every API route still checks the
+  session, so nothing a visitor can't see is reachable by a direct request.
+- **A visitor sees the recipe, not the circle.** The detail page skips the rating, private notes,
+  step and general tips, cook photos, edit/delete and "Enviar para a cozinha", and doesn't read
+  them from the database. Cook mode works, but doesn't read the kitchen state, so a visitor's step
+  changes are never pushed to the household's Alexa.
+- **Recipe photos are public, cook photos aren't.** `/api/uploads` serves keys of the form
+  `recipes/{recipeId}/{file}` (cover photos and their thumbnails) without a session; deeper keys
+  (`recipes/{recipeId}/cooked/...`) still need one.
+- **Header for visitors:** only the "Receitas" link and an "Entrar" button that returns to the
+  current page after login; no mobile tab bar (it would hold a single tab). The login screen has a
+  "Ver as receitas sem entrar" link back.

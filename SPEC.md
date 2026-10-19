@@ -61,6 +61,9 @@ Cooking) rather than an internal tool or a default-shadcn admin dashboard.
 - All authenticated users see the same shared recipe collection (a "circle"), each recipe tagged
   with its author.
 - Any circle member can view/edit/scale any recipe; ratings and notes are private per-user.
+- Visitors (not logged in) can browse and search the collection, open a recipe and use cook mode,
+  read-only. Everything else (adding/editing recipes, ratings, notes, tips, cook photos, the
+  kitchen, meal plan, shopping list, settings) needs a login.
 - Deletion: only the recipe's author can delete it; deletes are soft (a `deletedAt` timestamp) so
   accidental deletions are recoverable from the database.
 

@@ -21,7 +21,7 @@ export function RecipeSteps({
 }: {
   recipeId: string;
   steps: RecipeStep[];
-  /** Absent when the viewer isn't logged in — tips are then read-only via the count badge. */
+  /** Null when the viewer isn't logged in — tips are the circle's, so none are shown then. */
   currentUserId: string | null;
   initialTips: Tip[];
 }) {

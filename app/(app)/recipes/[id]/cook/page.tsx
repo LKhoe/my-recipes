@@ -1,13 +1,18 @@
 import { notFound } from "next/navigation";
-import { requireSession } from "@/lib/session";
+import { getSession } from "@/lib/session";
 import { getRecipeById } from "@/lib/services/recipe";
 import { getKitchenState } from "@/lib/services/kitchen";
 import { CookModeClient } from "@/components/recipes/CookModeClient";
 
 export default async function CookModePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await requireSession(`/recipes/${id}/cook`);
-  const [recipe, kitchenState] = await Promise.all([getRecipeById(id), getKitchenState()]);
+  const session = await getSession();
+  // Visitors cook from the page alone: without a session the household kitchen isn't read, so
+  // their step changes are never pushed to it.
+  const [recipe, kitchenState] = await Promise.all([
+    getRecipeById(id),
+    session?.user ? getKitchenState() : null,
+  ]);
 
   if (!recipe) notFound();
 

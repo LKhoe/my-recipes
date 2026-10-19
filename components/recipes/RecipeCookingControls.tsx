@@ -13,11 +13,14 @@ export function RecipeCookingControls({
   originalServings,
   ingredients,
   isActiveInKitchen,
+  canSendToKitchen,
 }: {
   recipeId: string;
   originalServings: number | null;
   ingredients: RecipeIngredientInput[];
   isActiveInKitchen: boolean;
+  /** The kitchen is the household's, so only a logged-in member can put a recipe on it. */
+  canSendToKitchen: boolean;
 }) {
   const [servings, setServings] = useState(originalServings);
 
@@ -29,7 +32,9 @@ export function RecipeCookingControls({
             <ChefHat className="size-4" /> Começar a cozinhar
           </Link>
         </Button>
-        <SendToKitchenButton recipeId={recipeId} servings={servings} isActive={isActiveInKitchen} />
+        {canSendToKitchen && (
+          <SendToKitchenButton recipeId={recipeId} servings={servings} isActive={isActiveInKitchen} />
+        )}
       </div>
       <ScalableIngredients
         originalServings={originalServings}

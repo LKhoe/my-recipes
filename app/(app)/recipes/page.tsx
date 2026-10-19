@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireSession } from "@/lib/session";
+import { getSession } from "@/lib/session";
 import { listRecipes } from "@/lib/services/recipe";
 import { listCategories } from "@/lib/services/category";
 import { RecipeCard } from "@/components/recipes/RecipeCard";
@@ -12,9 +12,9 @@ export default async function RecipesPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  await requireSession("/recipes");
   const params = await searchParams;
-  const [recipes, categories] = await Promise.all([
+  const [session, recipes, categories] = await Promise.all([
+    getSession(),
     listRecipes({
       q: params.q,
       categoryId: params.categoryId,
@@ -24,17 +24,20 @@ export default async function RecipesPage({
     listCategories(),
   ]);
 
+  const isLoggedIn = Boolean(session?.user);
   const hasFilters = Boolean(params.q || params.categoryId || params.tag || params.ingredient);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-display-lg text-foreground">Receitas</h1>
-        <Button asChild>
-          <Link href="/recipes/new">
-            <Plus className="size-4" /> Adicionar receita
-          </Link>
-        </Button>
+        {isLoggedIn && (
+          <Button asChild>
+            <Link href="/recipes/new">
+              <Plus className="size-4" /> Adicionar receita
+            </Link>
+          </Button>
+        )}
       </div>
 
       <form method="get" className="mt-6 flex flex-wrap items-center gap-2">
@@ -75,9 +78,11 @@ export default async function RecipesPage({
           <p className="max-w-sm text-sm text-muted-foreground">
             {hasFilters
               ? "Tente uma busca mais ampla, ou limpe os filtros."
-              : "Importe uma de um link ou vídeo do YouTube, ou adicione a sua manualmente."}
+              : isLoggedIn
+                ? "Importe uma de um link ou vídeo do YouTube, ou adicione a sua manualmente."
+                : "Volte mais tarde para ver as receitas."}
           </p>
-          {!hasFilters && (
+          {!hasFilters && isLoggedIn && (
             <Button asChild className="mt-2">
               <Link href="/recipes/new">Adicionar sua primeira receita</Link>
             </Button>

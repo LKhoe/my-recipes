@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { RecipeBowlMark } from "@/components/icons/RecipeBowlMark";
 import { getSession } from "@/lib/session";
@@ -17,6 +18,11 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
         <div className="rounded-2xl border border-border bg-card p-6 shadow-soft-lg">
           {children}
         </div>
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          <Link href="/recipes" className="underline-offset-4 hover:text-foreground hover:underline">
+            Ver as receitas sem entrar
+          </Link>
+        </p>
       </div>
     </div>
   );

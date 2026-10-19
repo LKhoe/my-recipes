@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
-import { requireSession } from "@/lib/session";
+import { getSession } from "@/lib/session";
 import { getRecipeById } from "@/lib/services/recipe";
 import { getUserRating } from "@/lib/services/rating";
 import { getUserNote } from "@/lib/services/note";
@@ -22,22 +22,26 @@ import { Pencil, ChefHat, Clock, Users } from "lucide-react";
 
 export default async function RecipeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await requireSession(`/recipes/${id}`);
-  const recipe = await getRecipeById(id);
+  const [session, recipe] = await Promise.all([getSession(), getRecipeById(id)]);
   if (!recipe) notFound();
 
-  const [rating, noteBody, kitchenState, cookPhotos, tips] = await Promise.all([
-    getUserRating(session.user.id, id),
-    getUserNote(session.user.id, id),
-    getKitchenState(),
-    listCookPhotos(id),
-    listTips(id),
-  ]);
+  // Visitors only see the recipe itself: ratings, notes, kitchen, cook photos and tips belong to
+  // the circle, so none of it is read without a session.
+  const userId = session?.user?.id ?? null;
+  const [rating, noteBody, kitchenState, cookPhotos, tips] = userId
+    ? await Promise.all([
+        getUserRating(userId, id),
+        getUserNote(userId, id),
+        getKitchenState(),
+        listCookPhotos(id),
+        listTips(id),
+      ])
+    : [null, null, null, [], []];
   const stepTips = tips.filter((t) => t.stepIndex !== null);
   const generalTips = tips.filter((t) => t.stepIndex === null);
 
   const heroImage = recipe.images[0];
-  const isAuthor = session?.user?.id === recipe.authorId;
+  const isAuthor = userId === recipe.authorId;
   const isActiveInKitchen = kitchenState?.activeRecipeId === recipe.id;
 
   return (
@@ -73,14 +77,16 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
             <p className="mt-1 text-sm text-muted-foreground">por {recipe.authorName}</p>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/recipes/${recipe.id}/edit`}>
-              <Pencil className="size-4" /> Editar
-            </Link>
-          </Button>
-          {isAuthor && <DeleteRecipeButton recipeId={recipe.id} />}
-        </div>
+        {userId && (
+          <div className="flex shrink-0 items-center gap-1">
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/recipes/${recipe.id}/edit`}>
+                <Pencil className="size-4" /> Editar
+              </Link>
+            </Button>
+            {isAuthor && <DeleteRecipeButton recipeId={recipe.id} />}
+          </div>
+        )}
       </div>
 
       {session?.user && (
@@ -125,6 +131,7 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
           originalServings={recipe.servings}
           ingredients={recipe.ingredients}
           isActiveInKitchen={isActiveInKitchen}
+          canSendToKitchen={Boolean(userId)}
         />
 
         <section>
@@ -132,7 +139,7 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
           <RecipeSteps
             recipeId={recipe.id}
             steps={recipe.steps}
-            currentUserId={session?.user?.id ?? null}
+            currentUserId={userId}
             initialTips={stepTips}
           />
         </section>
