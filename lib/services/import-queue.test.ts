@@ -4,14 +4,14 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 // The test drives the queue step by step with runNextImport; marking the loop as already started
 // keeps createImportBatch/retry from starting the real one alongside.
 vi.hoisted(() => {
-  globalThis.importWorkerState = { started: true, wake: null, pausedUntil: null, nextStartAt: null };
+  globalThis.importWorkerState = { started: true, wake: null, nextStartAt: null };
 });
 
 vi.mock("./import", () => ({ importRecipeFromUrl: vi.fn() }));
 vi.mock("./recipe-image", () => ({ attachImageFromUrl: vi.fn() }));
 
 import { db } from "@/lib/db";
-import { importBatchItem, user } from "@/lib/db/schema";
+import { importBatchItem, importQueueState, user } from "@/lib/db/schema";
 import type { RecipeDraft } from "@/types";
 import { importRecipeFromUrl } from "./import";
 import { LLMExtractionError, LLMLimitError } from "./llm";
@@ -57,7 +57,7 @@ describe("playlist import queue", () => {
 
   beforeEach(async () => {
     vi.resetAllMocks();
-    globalThis.importWorkerState!.pausedUntil = null;
+    await db.delete(importQueueState);
     vi.mocked(attachImageFromUrl).mockResolvedValue({ id: "img", path: "p", order: 0 });
     vi.spyOn(console, "warn").mockImplementation(() => {});
     // Leftovers from another run would be picked up first.
@@ -145,7 +145,7 @@ describe("playlist import queue", () => {
     expect(await runNextImport()).toBe(true);
     const [batch] = (await listImportBatches(userId)).filter((b) => b.id === batchId);
     expect(batch.items.map((i) => [i.status, i.recipeId])).toEqual([["pending", null]]);
-    const pause = getImportQueuePause();
+    const pause = await getImportQueuePause();
     expect(pause).not.toBeNull();
     expect(new Date(pause!).getTime() - Date.now()).toBeGreaterThan(25 * 60_000);
   });

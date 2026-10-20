@@ -1232,3 +1232,20 @@ anyway. The block was still on hours later.
   paused while blocked, shown in the popup). It only writes the steps, and only if the recipe still
   has none when the video is read; title, ingredients and edits are left alone. Author only and
   YouTube recipes only, since each one is an LLM call with the tier the user picks.
+
+## 2026-10-20 — Caption cache, persisted pause, 15 s between caption downloads
+
+The IP block above lasted hours and a restart would have made it worse: the in-memory pause was
+forgotten, the loop tried once, got blocked again and paused again. Libraries (`youtube-transcript`,
+`youtube-transcript-plus`, other Innertube clients, raw `timedtext`) were tried from the blocked IP:
+all of them hit the same `timedtext` 429, so none is a usable fallback.
+
+- **`video_transcript` table**: a downloaded transcript is kept by video id, and `fetchTranscriptText`
+  reads it before touching YouTube. Retries and "Buscar modo de preparo" no longer download again.
+  Only real transcripts are cached (not blocks, empty tracks or videos without captions); cache
+  read/write errors are logged and the download goes on.
+- **`import_queue_state` table** (one row): the queue's `pausedUntil` lives in the database, so the
+  30-minute pause survives a restart. `getImportQueuePause` is now async.
+- **Caption downloads start at least 15 s apart** (`CAPTION_REQUEST_SPACING_MS`, in
+  `services/youtube.ts`), for interactive imports too; concurrent callers line up. The queue's own
+  75 s spacing between videos is unchanged and already above it.

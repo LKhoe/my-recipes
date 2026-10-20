@@ -36,7 +36,7 @@ export async function GET() {
   }
   return NextResponse.json({
     batches: await listImportBatches(session.user.id),
-    pausedUntil: getImportQueuePause(),
+    pausedUntil: await getImportQueuePause(),
   });
 }
 

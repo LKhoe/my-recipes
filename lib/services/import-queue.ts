@@ -6,12 +6,12 @@
 //
 // Videos start at least IMPORT_SPACING_MS apart: downloading captions back to back got the server's
 // IP blocked by YouTube after ~12 videos. When captions are blocked anyway, the video goes back to
-// the queue and the loop pauses (BLOCKED_CAPTIONS_PAUSE_MS) instead of saving a recipe without its
-// method. The same queue also fills in the method of recipes saved without one (refillSteps items).
+// the queue and the loop pauses (BLOCKED_CAPTIONS_PAUSE_MS, kept in the database so a restart doesn't
+// forget it) instead of saving a recipe without its method. The same queue also fills in the method of recipes saved without one (refillSteps items).
 
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { importBatch, importBatchItem, recipe } from "@/lib/db/schema";
+import { importBatch, importBatchItem, importQueueState, recipe } from "@/lib/db/schema";
 import { ALLOWED_EXTERNAL_IMAGE_HOSTS } from "@/lib/image-constants";
 import type { LLMTier } from "@/lib/llm-tiers";
 import { recipeInputSchema } from "@/lib/validation";
@@ -30,6 +30,7 @@ const IDLE_POLL_MS = 60_000;
 // After a database error, so a database that is down isn't hammered.
 const ERROR_BACKOFF_MS = 15_000;
 // Between the starts of two videos; a 50-video playlist takes about an hour.
+// (Each caption download is also kept CAPTION_REQUEST_SPACING_MS apart in services/youtube.ts.)
 export const IMPORT_SPACING_MS = 75_000;
 // After YouTube blocks the captions; such a block lasts hours, so the loop checks back now and then.
 export const BLOCKED_CAPTIONS_PAUSE_MS = 30 * 60_000;
@@ -393,7 +394,7 @@ async function processItem(item: ClaimedItem) {
         .update(importBatchItem)
         .set({ status: "pending", startedAt: null })
         .where(eq(importBatchItem.id, item.id));
-      pauseImportQueue(BLOCKED_CAPTIONS_PAUSE_MS);
+      await pauseImportQueue(BLOCKED_CAPTIONS_PAUSE_MS);
       console.warn(`[import-queue] captions blocked by YouTube; pausing for ${BLOCKED_CAPTIONS_PAUSE_MS / 60_000} min`);
       return;
     }
@@ -428,8 +429,6 @@ export async function runNextImport(): Promise<boolean> {
 type WorkerState = {
   started: boolean;
   wake: (() => void) | null;
-  /** Epoch ms until which no video starts (captions blocked). */
-  pausedUntil: number | null;
   /** Epoch ms before which the next video doesn't start (IMPORT_SPACING_MS). */
   nextStartAt: number | null;
 };
@@ -442,17 +441,28 @@ declare global {
 const worker: WorkerState = (globalThis.importWorkerState ??= {
   started: false,
   wake: null,
-  pausedUntil: null,
   nextStartAt: null,
 });
 
-export function pauseImportQueue(ms: number) {
-  worker.pausedUntil = Date.now() + ms;
+/** No video starts for `ms`. Stored in the database: it must outlive a restart. */
+export async function pauseImportQueue(ms: number) {
+  const pausedUntil = new Date(Date.now() + ms);
+  await db
+    .insert(importQueueState)
+    .values({ pausedUntil })
+    .onConflictDoUpdate({ target: importQueueState.id, set: { pausedUntil } });
+}
+
+/** When the queue resumes, if it's paused because captions are blocked; null otherwise. */
+async function getPausedUntilMs(): Promise<number | null> {
+  const [row] = await db.select({ pausedUntil: importQueueState.pausedUntil }).from(importQueueState);
+  return row?.pausedUntil && row.pausedUntil.getTime() > Date.now() ? row.pausedUntil.getTime() : null;
 }
 
 /** For the progress popup: when the queue resumes, if it's paused because captions are blocked. */
-export function getImportQueuePause(): string | null {
-  return worker.pausedUntil && worker.pausedUntil > Date.now() ? new Date(worker.pausedUntil).toISOString() : null;
+export async function getImportQueuePause(): Promise<string | null> {
+  const until = await getPausedUntilMs();
+  return until ? new Date(until).toISOString() : null;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -481,7 +491,7 @@ export function startImportWorker() {
           await db.update(importBatchItem).set({ status: "pending", startedAt: null }).where(eq(importBatchItem.status, "running"));
           recovered = true;
         }
-        const wait = Math.max(worker.pausedUntil ?? 0, worker.nextStartAt ?? 0) - Date.now();
+        const wait = Math.max((await getPausedUntilMs()) ?? 0, worker.nextStartAt ?? 0) - Date.now();
         if (wait > 0) {
           // A wake (new batch, retry) during the wait just re-checks it.
           await sleep(wait);

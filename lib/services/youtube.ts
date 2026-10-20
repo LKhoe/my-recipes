@@ -1,4 +1,7 @@
+import { eq } from "drizzle-orm";
 import { Innertube, Log } from "youtubei.js";
+import { db } from "@/lib/db";
+import { videoTranscript } from "@/lib/db/schema";
 
 export { parseYouTubeVideoId, isYouTubeUrl } from "@/lib/youtube-utils";
 
@@ -10,6 +13,43 @@ export class YouTubePlaylistError extends Error {}
  * downloads in 3.5 minutes during a playlist import; it lasts hours.
  */
 export class CaptionsBlockedError extends Error {}
+
+// YouTube blocked this server's IP after ~12 caption downloads in 3.5 minutes, so no two downloads
+// start closer than this, whoever asks (a queued video or someone importing by hand).
+export const CAPTION_REQUEST_SPACING_MS = 15_000;
+
+type CaptionThrottle = { nextAt: number };
+declare global {
+  var captionThrottle: CaptionThrottle | undefined;
+}
+// On globalThis: instrumentation.ts (the queue) and the route handlers are separate bundles.
+const captionThrottle: CaptionThrottle = (globalThis.captionThrottle ??= { nextAt: 0 });
+
+/** Waits for this caller's turn; concurrent callers line up CAPTION_REQUEST_SPACING_MS apart. */
+async function waitForCaptionSlot(): Promise<void> {
+  const slot = Math.max(Date.now(), captionThrottle.nextAt);
+  captionThrottle.nextAt = slot + CAPTION_REQUEST_SPACING_MS;
+  const wait = slot - Date.now();
+  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+}
+
+async function readCachedTranscript(videoId: string): Promise<string | null> {
+  try {
+    const [row] = await db.select({ text: videoTranscript.text }).from(videoTranscript).where(eq(videoTranscript.videoId, videoId));
+    return row?.text ?? null;
+  } catch (err) {
+    console.warn(`[youtube] ${videoId}: transcript cache read failed:`, err);
+    return null;
+  }
+}
+
+async function cacheTranscript(videoId: string, text: string): Promise<void> {
+  try {
+    await db.insert(videoTranscript).values({ videoId, text }).onConflictDoNothing();
+  } catch (err) {
+    console.warn(`[youtube] ${videoId}: transcript cache write failed:`, err);
+  }
+}
 
 export type YouTubeVideoMetadata = {
   title: string;
@@ -176,10 +216,15 @@ export function parseJson3Captions(json: { events?: { segs?: { utf8?: string }[]
  * audio processing. Reads the caption track directly: Innertube's `get_transcript` endpoint
  * (`info.getTranscript()`) now answers HTTP 400, and the WEB client's caption URLs need a PO token
  * (they return an empty body without one). The ANDROID client's caption URLs work as-is.
- * Throws CaptionsBlockedError when YouTube blocks the download; any other failure is null.
+ * A transcript is downloaded once (video_transcript) and downloads are CAPTION_REQUEST_SPACING_MS
+ * apart. Throws CaptionsBlockedError when YouTube blocks the download; any other failure is null.
  */
 export async function fetchTranscriptText(videoId: string): Promise<string | null> {
+  const cached = await readCachedTranscript(videoId);
+  if (cached) return cached;
+
   try {
+    await waitForCaptionSlot();
     const youtube = await getInnertube();
     const info = await youtube.getBasicInfo(videoId, { client: "ANDROID" });
     const track = pickCaptionTrack(info.captions?.caption_tracks ?? []);
@@ -205,6 +250,7 @@ export async function fetchTranscriptText(videoId: string): Promise<string | nul
       console.warn(`[youtube] ${videoId}: the ${track.language_code} caption track is empty`);
       return null;
     }
+    await cacheTranscript(videoId, text);
     return text;
   } catch (err) {
     if (err instanceof CaptionsBlockedError) {

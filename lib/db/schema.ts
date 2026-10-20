@@ -484,6 +484,25 @@ export const importBatchItem = pgTable(
   ],
 );
 
+// A single row: when the queue may start videos again after YouTube blocked the captions. In the
+// database so a restart doesn't make the loop try, get blocked again and extend the block.
+export const importQueueState = pgTable(
+  "import_queue_state",
+  {
+    id: text("id").primaryKey().default("singleton"),
+    pausedUntil: timestamp("paused_until"),
+  },
+  (table) => [check("import_queue_state_singleton_id", sql`${table.id} = 'singleton'`)],
+);
+
+// A video's captions, kept once downloaded: YouTube blocks the server's IP for hours when captions
+// are fetched too often, so a video is never downloaded twice (retries, "Buscar modo de preparo").
+export const videoTranscript = pgTable("video_transcript", {
+  videoId: text("video_id").primaryKey(),
+  text: text("text").notNull(),
+  fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
+});
+
 // ---------------------------------------------------------------------------
 // Kitchen state — circle-wide singleton (SPEC §9.1)
 // ---------------------------------------------------------------------------

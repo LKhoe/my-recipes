@@ -1,4 +1,7 @@
+import { eq } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
+import { db } from "@/lib/db";
+import { videoTranscript } from "@/lib/db/schema";
 import { parseJson3Captions, pickCaptionTrack, pickThumbnailUrl } from "./youtube";
 
 describe("pickCaptionTrack", () => {
@@ -72,15 +75,83 @@ describe("fetchTranscriptText", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       const youtube = await import("./youtube");
+      globalThis.captionThrottle!.nextAt = 0;
       await expect(youtube.fetchTranscriptText("x")).rejects.toBeInstanceOf(youtube.CaptionsBlockedError);
 
       // Any other failure is still just "no transcript".
       global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404, text: async () => "" });
+      globalThis.captionThrottle!.nextAt = 0;
       await expect(youtube.fetchTranscriptText("x")).resolves.toBeNull();
     } finally {
       global.fetch = originalFetch;
       vi.doUnmock("youtubei.js");
       vi.restoreAllMocks();
     }
+  });
+
+  describe("transcript cache and request spacing", () => {
+    const videoId = `cache${Date.now()}`;
+
+    async function load() {
+      vi.resetModules();
+      vi.doMock("youtubei.js", () => ({
+        Log: { setLevel: vi.fn(), Level: { ERROR: 1 } },
+        Innertube: {
+          create: async () => ({
+            getBasicInfo: async () => ({
+              captions: { caption_tracks: [{ base_url: "https://www.youtube.com/api/timedtext?v=x", language_code: "pt" }] },
+            }),
+          }),
+        },
+      }));
+      return import("./youtube");
+    }
+
+    it("downloads a video's captions once and then reads them from the database", async () => {
+      const youtube = await load();
+      const body = JSON.stringify({ events: [{ segs: [{ utf8: "misture " }, { utf8: "tudo" }] }] });
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => body });
+      const originalFetch = global.fetch;
+      global.fetch = fetchMock;
+      try {
+        globalThis.captionThrottle!.nextAt = 0;
+        await expect(youtube.fetchTranscriptText(videoId)).resolves.toBe("misture tudo");
+        await expect(youtube.fetchTranscriptText(videoId)).resolves.toBe("misture tudo");
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      } finally {
+        global.fetch = originalFetch;
+        vi.doUnmock("youtubei.js");
+        await db.delete(videoTranscript).where(eq(videoTranscript.videoId, videoId));
+      }
+    });
+
+    it("starts caption downloads at least 15 seconds apart", async () => {
+      vi.useFakeTimers();
+      try {
+        const youtube = await load();
+        globalThis.captionThrottle!.nextAt = 0;
+        const originalFetch = global.fetch;
+        const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404, text: async () => "" });
+        global.fetch = fetchMock;
+        vi.spyOn(console, "warn").mockImplementation(() => {});
+        try {
+          const first = youtube.fetchTranscriptText("spacing-a");
+          const second = youtube.fetchTranscriptText("spacing-b");
+          // The cache lookups are real database I/O, so wait for the first download to start.
+          await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+          await vi.advanceTimersByTimeAsync(youtube.CAPTION_REQUEST_SPACING_MS - 1);
+          expect(fetchMock).toHaveBeenCalledTimes(1);
+          await vi.advanceTimersByTimeAsync(1);
+          await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+          await Promise.all([first, second]);
+        } finally {
+          global.fetch = originalFetch;
+        }
+      } finally {
+        vi.useRealTimers();
+        vi.doUnmock("youtubei.js");
+        vi.restoreAllMocks();
+      }
+    });
   });
 });
