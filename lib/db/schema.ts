@@ -470,7 +470,10 @@ export const importBatchItem = pgTable(
     position: integer("position").notNull(),
     status: importItemStatusEnum("status").notNull().default("pending"),
     error: text("error"),
+    // The recipe made from the video; for a `refillSteps` item, the recipe whose method is fetched.
     recipeId: text("recipe_id").references(() => recipe.id, { onDelete: "set null" }),
+    // Fills in the method of an existing recipe instead of creating one ("Buscar modo de preparo").
+    refillSteps: boolean("refill_steps").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     startedAt: timestamp("started_at"),
     finishedAt: timestamp("finished_at"),

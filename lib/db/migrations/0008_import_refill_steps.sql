@@ -1,0 +1,1 @@
+ALTER TABLE "import_batch_item" ADD COLUMN "refill_steps" boolean DEFAULT false NOT NULL;

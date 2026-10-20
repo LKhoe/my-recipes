@@ -3,19 +3,25 @@
 // for why this is a table and not Redis/BullMQ. The loop starts with the server
 // (instrumentation.ts) and is woken whenever a batch is queued or retried; an item left `running`
 // by a restart goes back to `pending` when the loop starts again.
+//
+// Videos start at least IMPORT_SPACING_MS apart: downloading captions back to back got the server's
+// IP blocked by YouTube after ~12 videos. When captions are blocked anyway, the video goes back to
+// the queue and the loop pauses (BLOCKED_CAPTIONS_PAUSE_MS) instead of saving a recipe without its
+// method. The same queue also fills in the method of recipes saved without one (refillSteps items).
 
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { importBatch, importBatchItem } from "@/lib/db/schema";
+import { importBatch, importBatchItem, recipe } from "@/lib/db/schema";
 import { ALLOWED_EXTERNAL_IMAGE_HOSTS } from "@/lib/image-constants";
 import type { LLMTier } from "@/lib/llm-tiers";
 import { recipeInputSchema } from "@/lib/validation";
-import { cleanVideoTitle, youTubeWatchUrl } from "@/lib/youtube-utils";
+import { cleanVideoTitle, parseYouTubeVideoId, youTubeWatchUrl } from "@/lib/youtube-utils";
 import { PageFetchError } from "@/lib/services/html-fetch";
 import { importRecipeFromUrl } from "@/lib/services/import";
 import { LLMExtractionError, LLMLimitError } from "@/lib/services/llm";
 import { createRecipe } from "@/lib/services/recipe";
 import { attachImageFromUrl } from "@/lib/services/recipe-image";
+import { CaptionsBlockedError } from "@/lib/services/youtube";
 import type { RecipeDraft, RecipeInput } from "@/types";
 
 export const MAX_BATCH_VIDEOS = 200;
@@ -23,6 +29,12 @@ export const MAX_BATCH_VIDEOS = 200;
 const IDLE_POLL_MS = 60_000;
 // After a database error, so a database that is down isn't hammered.
 const ERROR_BACKOFF_MS = 15_000;
+// Between the starts of two videos; a 50-video playlist takes about an hour.
+export const IMPORT_SPACING_MS = 75_000;
+// After YouTube blocks the captions; such a block lasts hours, so the loop checks back now and then.
+export const BLOCKED_CAPTIONS_PAUSE_MS = 30 * 60_000;
+
+const NO_STEPS_ERROR = "O vídeo não trouxe o modo de preparo (nem na legenda nem na descrição).";
 
 export type ImportItemStatus = (typeof importBatchItem.status.enumValues)[number];
 const FINISHED_STATUSES: ImportItemStatus[] = ["done", "no_recipe", "failed", "cancelled"];
@@ -35,6 +47,8 @@ export type ImportBatchItemView = {
   status: ImportItemStatus;
   error: string | null;
   recipeId: string | null;
+  /** Fills in the method of an existing recipe instead of creating one. */
+  refillSteps: boolean;
 };
 
 export type ImportBatchView = {
@@ -96,6 +110,7 @@ export async function listImportBatches(userId: string): Promise<ImportBatchView
       status: importBatchItem.status,
       error: importBatchItem.error,
       recipeId: importBatchItem.recipeId,
+      refillSteps: importBatchItem.refillSteps,
     })
     .from(importBatchItem)
     .where(
@@ -112,7 +127,7 @@ export async function listImportBatches(userId: string): Promise<ImportBatchView
     createdAt: batch.createdAt.toISOString(),
     items: items
       .filter((i) => i.batchId === batch.id)
-      .map(({ id, videoId, title, thumbnailUrl, status, error, recipeId }) => ({
+      .map(({ id, videoId, title, thumbnailUrl, status, error, recipeId, refillSteps }) => ({
         id,
         videoId,
         title,
@@ -120,8 +135,55 @@ export async function listImportBatches(userId: string): Promise<ImportBatchView
         status,
         error,
         recipeId,
+        refillSteps,
       })),
   }));
+}
+
+/**
+ * Queues "Buscar modo de preparo" for the user's own recipes that came from a YouTube video and
+ * still have no method. Other recipes in `recipeIds` are skipped. Returns how many were queued.
+ */
+export async function queueStepsRefill(userId: string, recipeIds: string[], tier: LLMTier): Promise<number> {
+  if (recipeIds.length === 0) return 0;
+  const targets = (
+    await db
+      .select({ id: recipe.id, title: recipe.title, videoUrl: recipe.videoUrl })
+      .from(recipe)
+      .where(
+        and(
+          inArray(recipe.id, recipeIds.slice(0, MAX_BATCH_VIDEOS)),
+          eq(recipe.authorId, userId),
+          isNull(recipe.deletedAt),
+          isNotNull(recipe.videoUrl),
+          sql`jsonb_array_length(${recipe.steps}) = 0`,
+        ),
+      )
+  ).flatMap((r) => {
+    const videoId = r.videoUrl ? parseYouTubeVideoId(r.videoUrl) : null;
+    return videoId ? [{ ...r, videoId }] : [];
+  });
+  if (targets.length === 0) return 0;
+
+  await db.transaction(async (tx) => {
+    const [batch] = await tx
+      .insert(importBatch)
+      .values({ userId, title: "Modo de preparo", tier })
+      .returning({ id: importBatch.id });
+    await tx.insert(importBatchItem).values(
+      targets.map((t, position) => ({
+        batchId: batch.id,
+        videoId: t.videoId,
+        title: t.title,
+        thumbnailUrl: `https://i.ytimg.com/vi/${t.videoId}/mqdefault.jpg`,
+        position,
+        recipeId: t.id,
+        refillSteps: true,
+      })),
+    );
+  });
+  wakeImportWorker();
+  return targets.length;
 }
 
 /** Video ids the user already has waiting or running in a batch, so the picker can flag them. */
@@ -184,7 +246,16 @@ export function isFinished(status: ImportItemStatus): boolean {
 // Worker
 // ---------------------------------------------------------------------------
 
-type ClaimedItem = { id: string; batchId: string; videoId: string; title: string; userId: string; tier: LLMTier };
+type ClaimedItem = {
+  id: string;
+  batchId: string;
+  videoId: string;
+  title: string;
+  recipeId: string | null;
+  refillSteps: boolean;
+  userId: string;
+  tier: LLMTier;
+};
 
 /** Takes the oldest pending video. SKIP LOCKED keeps two loops (e.g. an overlapping deploy) apart. */
 async function claimNextItem(): Promise<ClaimedItem | null> {
@@ -207,6 +278,8 @@ async function claimNextItem(): Promise<ClaimedItem | null> {
       batchId: importBatchItem.batchId,
       videoId: importBatchItem.videoId,
       title: importBatchItem.title,
+      recipeId: importBatchItem.recipeId,
+      refillSteps: importBatchItem.refillSteps,
     });
   if (!claimed) return null;
 
@@ -258,33 +331,76 @@ function isExternalImage(url: string): boolean {
   }
 }
 
+/** Creates a recipe from the video, pending its author's review. */
+async function importNewRecipe(item: ClaimedItem, draft: RecipeDraft) {
+  if (!draft.recipeFound) {
+    await finishItem(item.id, "no_recipe", { error: "Não encontramos uma receita neste vídeo." });
+    return;
+  }
+
+  const parsed = recipeInputSchema.safeParse(draftToRecipeInput(draft, item.title));
+  if (!parsed.success) {
+    console.warn(`[import-queue] ${item.videoId}: draft didn't validate:`, parsed.error.message);
+    await finishItem(item.id, "failed", { error: "A receita extraída veio incompleta." });
+    return;
+  }
+  // Saved without a method it would only look done; failing it shows up in the popup instead.
+  if (parsed.data.steps.length === 0) {
+    await finishItem(item.id, "failed", { error: NO_STEPS_ERROR });
+    return;
+  }
+
+  // Imported recipes wait for their author's review (see ReviewPendingNotice).
+  const { id: recipeId } = await createRecipe(item.userId, parsed.data, { reviewPending: true });
+  if (draft.imageUrl) {
+    await attachImageFromUrl(recipeId, draft.imageUrl, { external: isExternalImage(draft.imageUrl) }).catch((err) =>
+      console.warn(`[import-queue] ${item.videoId}: photo not attached:`, (err as Error).message),
+    );
+  }
+  await finishItem(item.id, "done", { recipeId });
+}
+
+/** Fills in the method of an existing recipe; leaves it alone if someone wrote one meanwhile. */
+async function refillRecipeSteps(item: ClaimedItem, draft: RecipeDraft) {
+  const steps = draft.recipeFound ? draftToRecipeInput(draft, item.title).steps : [];
+  if (steps.length === 0) {
+    await finishItem(item.id, "failed", { error: NO_STEPS_ERROR, recipeId: item.recipeId });
+    return;
+  }
+  await db
+    .update(recipe)
+    .set({ steps, updatedAt: new Date() })
+    .where(and(eq(recipe.id, item.recipeId!), sql`jsonb_array_length(${recipe.steps}) = 0`));
+  await finishItem(item.id, "done", { recipeId: item.recipeId });
+}
+
 async function processItem(item: ClaimedItem) {
   try {
-    const draft = await importRecipeFromUrl(youTubeWatchUrl(item.videoId), { tier: item.tier });
-    if (!draft.recipeFound) {
-      await finishItem(item.id, "no_recipe", { error: "Não encontramos uma receita neste vídeo." });
+    if (item.refillSteps && !item.recipeId) {
+      await finishItem(item.id, "failed", { error: "A receita foi apagada." });
       return;
     }
-
-    const parsed = recipeInputSchema.safeParse(draftToRecipeInput(draft, item.title));
-    if (!parsed.success) {
-      console.warn(`[import-queue] ${item.videoId}: draft didn't validate:`, parsed.error.message);
-      await finishItem(item.id, "failed", { error: "A receita extraída veio incompleta." });
-      return;
-    }
-
-    // Imported recipes wait for their author's review (see ReviewPendingNotice).
-    const { id: recipeId } = await createRecipe(item.userId, parsed.data, { reviewPending: true });
-    if (draft.imageUrl) {
-      await attachImageFromUrl(recipeId, draft.imageUrl, { external: isExternalImage(draft.imageUrl) }).catch((err) =>
-        console.warn(`[import-queue] ${item.videoId}: photo not attached:`, (err as Error).message),
-      );
-    }
-    await finishItem(item.id, "done", { recipeId });
+    const draft = await importRecipeFromUrl(youTubeWatchUrl(item.videoId), {
+      tier: item.tier,
+      failOnBlockedCaptions: true,
+    });
+    if (item.refillSteps) await refillRecipeSteps(item, draft);
+    else await importNewRecipe(item, draft);
   } catch (err) {
+    if (err instanceof CaptionsBlockedError) {
+      // Thrown before the LLM call, so nothing was spent: back to the queue, and wait.
+      await db
+        .update(importBatchItem)
+        .set({ status: "pending", startedAt: null })
+        .where(eq(importBatchItem.id, item.id));
+      pauseImportQueue(BLOCKED_CAPTIONS_PAUSE_MS);
+      console.warn(`[import-queue] captions blocked by YouTube; pausing for ${BLOCKED_CAPTIONS_PAUSE_MS / 60_000} min`);
+      return;
+    }
+    const recipeId = item.refillSteps ? item.recipeId : null;
     if (err instanceof LLMLimitError) {
       // Every later video would hit the same limit: stop the batch, the user can retry it later.
-      await finishItem(item.id, "failed", { error: err.message });
+      await finishItem(item.id, "failed", { error: err.message, recipeId });
       await db
         .update(importBatchItem)
         .set({ status: "failed", error: err.message, finishedAt: new Date() })
@@ -296,6 +412,7 @@ async function processItem(item: ClaimedItem) {
     else console.warn(`[import-queue] ${item.videoId}: import failed:`, (err as Error).message);
     await finishItem(item.id, "failed", {
       error: known ? (err as Error).message : "A importação falhou inesperadamente.",
+      recipeId,
     });
   }
 }
@@ -308,14 +425,35 @@ export async function runNextImport(): Promise<boolean> {
   return true;
 }
 
-type WorkerState = { started: boolean; wake: (() => void) | null };
+type WorkerState = {
+  started: boolean;
+  wake: (() => void) | null;
+  /** Epoch ms until which no video starts (captions blocked). */
+  pausedUntil: number | null;
+  /** Epoch ms before which the next video doesn't start (IMPORT_SPACING_MS). */
+  nextStartAt: number | null;
+};
 
 declare global {
   var importWorkerState: WorkerState | undefined;
 }
 
 // On globalThis: instrumentation.ts and the route handlers are separate bundles in one process.
-const worker: WorkerState = (globalThis.importWorkerState ??= { started: false, wake: null });
+const worker: WorkerState = (globalThis.importWorkerState ??= {
+  started: false,
+  wake: null,
+  pausedUntil: null,
+  nextStartAt: null,
+});
+
+export function pauseImportQueue(ms: number) {
+  worker.pausedUntil = Date.now() + ms;
+}
+
+/** For the progress popup: when the queue resumes, if it's paused because captions are blocked. */
+export function getImportQueuePause(): string | null {
+  return worker.pausedUntil && worker.pausedUntil > Date.now() ? new Date(worker.pausedUntil).toISOString() : null;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -343,7 +481,17 @@ export function startImportWorker() {
           await db.update(importBatchItem).set({ status: "pending", startedAt: null }).where(eq(importBatchItem.status, "running"));
           recovered = true;
         }
-        if (await runNextImport()) continue;
+        const wait = Math.max(worker.pausedUntil ?? 0, worker.nextStartAt ?? 0) - Date.now();
+        if (wait > 0) {
+          // A wake (new batch, retry) during the wait just re-checks it.
+          await sleep(wait);
+          continue;
+        }
+        const startedAt = Date.now();
+        if (await runNextImport()) {
+          worker.nextStartAt = startedAt + IMPORT_SPACING_MS;
+          continue;
+        }
         await sleep(IDLE_POLL_MS);
       } catch (err) {
         console.error("[import-queue] worker error:", err);

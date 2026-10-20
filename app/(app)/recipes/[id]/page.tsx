@@ -19,6 +19,7 @@ import { CookPhotoGallery } from "@/components/recipes/CookPhotoGallery";
 import { RecipeSteps } from "@/components/recipes/RecipeSteps";
 import { GeneralTips } from "@/components/recipes/GeneralTips";
 import { ReviewPendingNotice } from "@/components/recipes/ReviewPendingNotice";
+import { RefillStepsControl } from "@/components/recipes/RefillStepsControl";
 import { Pencil, ChefHat, Clock, Users } from "lucide-react";
 
 export default async function RecipeDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -141,12 +142,22 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
 
         <section>
           <h2 className="font-display text-display-sm text-foreground">Modo de preparo</h2>
-          <RecipeSteps
-            recipeId={recipe.id}
-            steps={recipe.steps}
-            currentUserId={userId}
-            initialTips={stepTips}
-          />
+          {recipe.steps.length > 0 ? (
+            <RecipeSteps
+              recipeId={recipe.id}
+              steps={recipe.steps}
+              currentUserId={userId}
+              initialTips={stepTips}
+            />
+          ) : (
+            <div className="mt-3 flex flex-col gap-3 rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+              <p>Esta receita está sem modo de preparo.</p>
+              {/* Videos imported while YouTube blocked their captions came out without one. */}
+              {isAuthor && recipe.videoUrl && (
+                <RefillStepsControl recipeIds={[recipe.id]} label="Buscar modo de preparo no vídeo" />
+              )}
+            </div>
+          )}
         </section>
       </div>
 

@@ -18,6 +18,7 @@ vi.mock("./llm", () => ({
 }));
 
 vi.mock("./youtube", () => ({
+  CaptionsBlockedError: class CaptionsBlockedError extends Error {},
   isYouTubeUrl: vi.fn(),
   parseYouTubeVideoId: vi.fn(),
   fetchVideoMetadata: vi.fn(),
@@ -27,7 +28,13 @@ vi.mock("./youtube", () => ({
 import { extractMetaImageUrl, fetchPageHtml, stripToReadableText } from "./html-fetch";
 import { extractRecipeFromJsonLd } from "./jsonld";
 import { extractRecipeWithLLM, LLMExtractionError } from "./llm";
-import { fetchTranscriptText, fetchVideoMetadata, isYouTubeUrl, parseYouTubeVideoId } from "./youtube";
+import {
+  CaptionsBlockedError,
+  fetchTranscriptText,
+  fetchVideoMetadata,
+  isYouTubeUrl,
+  parseYouTubeVideoId,
+} from "./youtube";
 import { importRecipeFromUrl } from "./import";
 import type { RecipeDraft } from "@/types";
 
@@ -160,7 +167,7 @@ describe("importRecipeFromUrl", () => {
 
     const draft = await importRecipeFromUrl("https://youtu.be/abc123");
 
-    expect(draft).toEqual(foundDraft);
+    expect(draft).toEqual({ ...foundDraft, warning: null });
     expect(extractRecipeWithLLM).toHaveBeenCalledTimes(1);
     expect(extractRecipeWithLLM).toHaveBeenCalledWith(
       "Title: Tomato Pasta\n\nDescription:\ningredients: 400g tomatoes\n\nTranscript:\nhey everyone... a glug of olive oil ...",
@@ -172,6 +179,31 @@ describe("importRecipeFromUrl", () => {
     );
   });
 
+  it("reads the description alone with a warning when YouTube blocks the captions", async () => {
+    vi.mocked(isYouTubeUrl).mockReturnValue(true);
+    vi.mocked(parseYouTubeVideoId).mockReturnValue("abc123");
+    vi.mocked(fetchVideoMetadata).mockResolvedValue({ title: "Bolo", description: "ingredientes: ...", thumbnailUrl: null });
+    vi.mocked(fetchTranscriptText).mockRejectedValue(new CaptionsBlockedError("blocked"));
+    vi.mocked(extractRecipeWithLLM).mockResolvedValue(foundDraft);
+
+    const draft = await importRecipeFromUrl("https://youtu.be/abc123");
+
+    expect(extractRecipeWithLLM).toHaveBeenCalledWith("Title: Bolo\n\nDescription:\ningredientes: ...", expect.anything());
+    expect(draft.warning).toMatch(/bloqueou temporariamente as legendas/);
+  });
+
+  it("fails before the LLM call on blocked captions when asked to (the queue)", async () => {
+    vi.mocked(isYouTubeUrl).mockReturnValue(true);
+    vi.mocked(parseYouTubeVideoId).mockReturnValue("abc123");
+    vi.mocked(fetchVideoMetadata).mockResolvedValue({ title: "Bolo", description: "ingredientes: ...", thumbnailUrl: null });
+    vi.mocked(fetchTranscriptText).mockRejectedValue(new CaptionsBlockedError("blocked"));
+
+    await expect(importRecipeFromUrl("https://youtu.be/abc123", { failOnBlockedCaptions: true })).rejects.toBeInstanceOf(
+      CaptionsBlockedError,
+    );
+    expect(extractRecipeWithLLM).not.toHaveBeenCalled();
+  });
+
   it("uses the transcript alone when there is no metadata (no API key)", async () => {
     vi.mocked(isYouTubeUrl).mockReturnValue(true);
     vi.mocked(parseYouTubeVideoId).mockReturnValue("abc123");
@@ -181,7 +213,7 @@ describe("importRecipeFromUrl", () => {
 
     const draft = await importRecipeFromUrl("https://youtu.be/abc123");
 
-    expect(draft).toEqual(foundDraft);
+    expect(draft).toEqual({ ...foundDraft, warning: null });
     expect(extractRecipeWithLLM).toHaveBeenCalledWith(
       "Transcript:\nhey everyone... a glug of olive oil ...",
       expect.objectContaining({ context: "youtube", imageUrl: null }),

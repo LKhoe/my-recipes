@@ -3,7 +3,13 @@ import { extractMetaImageUrl, fetchPageHtml, resolveImageUrl, stripToReadableTex
 import { extractRecipeFromJsonLd } from "@/lib/services/jsonld";
 import type { LLMTier } from "@/lib/llm-tiers";
 import { extractRecipeWithLLM } from "@/lib/services/llm";
-import { fetchTranscriptText, fetchVideoMetadata, isYouTubeUrl, parseYouTubeVideoId } from "@/lib/services/youtube";
+import {
+  CaptionsBlockedError,
+  fetchTranscriptText,
+  fetchVideoMetadata,
+  isYouTubeUrl,
+  parseYouTubeVideoId,
+} from "@/lib/services/youtube";
 import { cleanVideoTitle } from "@/lib/youtube-utils";
 import type { RecipeDraft } from "@/types";
 
@@ -45,7 +51,21 @@ async function importFromWebpage(url: string, tier?: LLMTier): Promise<RecipeDra
   });
 }
 
-async function importFromYouTube(url: string, tier?: LLMTier): Promise<RecipeDraft> {
+export type ImportOptions = {
+  /** Which LLM tier reads the page or video when there's no JSON-LD (the user's choice on import). */
+  tier?: LLMTier;
+  /**
+   * Throw CaptionsBlockedError instead of going on with the description alone when YouTube blocks
+   * the captions. The queue sets it: the method is usually in the captions, so it waits and tries
+   * again rather than spending an LLM call on a recipe without one.
+   */
+  failOnBlockedCaptions?: boolean;
+};
+
+const BLOCKED_CAPTIONS_WARNING =
+  "O YouTube bloqueou temporariamente as legendas, então a receita foi lida só da descrição do vídeo. Confira o modo de preparo.";
+
+async function importFromYouTube(url: string, opts: ImportOptions): Promise<RecipeDraft> {
   const videoId = parseYouTubeVideoId(url);
   if (!videoId) {
     throw new Error("Could not parse a video id from that YouTube URL.");
@@ -53,7 +73,16 @@ async function importFromYouTube(url: string, tier?: LLMTier): Promise<RecipeDra
 
   // SPEC §4.6b: description and transcript go to the LLM together, in one call — the description
   // often has the exact quantities, the transcript the method.
-  const [metadata, transcript] = await Promise.all([fetchVideoMetadata(videoId), fetchTranscriptText(videoId)]);
+  let captionsBlocked = false;
+  const [metadata, transcript] = await Promise.all([
+    fetchVideoMetadata(videoId),
+    fetchTranscriptText(videoId).catch((err) => {
+      if (!(err instanceof CaptionsBlockedError) || opts.failOnBlockedCaptions) throw err;
+      captionsBlocked = true;
+      return null;
+    }),
+  ]);
+  const warning = captionsBlocked ? BLOCKED_CAPTIONS_WARNING : null;
 
   if (metadata?.description || transcript) {
     const sections = [
@@ -71,11 +100,11 @@ async function importFromYouTube(url: string, tier?: LLMTier): Promise<RecipeDra
       sourceUrl: url,
       videoUrl: url,
       imageUrl: metadata?.thumbnailUrl ?? null,
-      tier,
+      tier: opts.tier,
     });
     // The prompt asks for a sentence-case title, but the model sometimes copies an all-caps video
     // title as-is.
-    if (draft.recipeFound) return { ...draft, title: cleanVideoTitle(draft.title || metadata?.title || "") };
+    if (draft.recipeFound) return { ...draft, title: cleanVideoTitle(draft.title || metadata?.title || ""), warning };
     console.warn(`[import] ${videoId}: no recipe in the video's description or transcript`);
   } else {
     console.warn(`[import] ${videoId}: neither a description nor a transcript is available`);
@@ -94,11 +123,11 @@ async function importFromYouTube(url: string, tier?: LLMTier): Promise<RecipeDra
     sourceUrl: url,
     videoUrl: url,
     imageUrl: metadata?.thumbnailUrl ?? null,
+    warning,
   };
 }
 
-// tier: which LLM tier reads the page when it has no JSON-LD (the user's choice on import)
-export async function importRecipeFromUrl(url: string, opts: { tier?: LLMTier } = {}): Promise<RecipeDraft> {
-  const draft = isYouTubeUrl(url) ? await importFromYouTube(url, opts.tier) : await importFromWebpage(url, opts.tier);
+export async function importRecipeFromUrl(url: string, opts: ImportOptions = {}): Promise<RecipeDraft> {
+  const draft = isYouTubeUrl(url) ? await importFromYouTube(url, opts) : await importFromWebpage(url, opts.tier);
   return finalizeDraft(draft);
 }

@@ -4,7 +4,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 // The test drives the queue step by step with runNextImport; marking the loop as already started
 // keeps createImportBatch/retry from starting the real one alongside.
 vi.hoisted(() => {
-  globalThis.importWorkerState = { started: true, wake: null };
+  globalThis.importWorkerState = { started: true, wake: null, pausedUntil: null, nextStartAt: null };
 });
 
 vi.mock("./import", () => ({ importRecipeFromUrl: vi.fn() }));
@@ -15,13 +15,16 @@ import { importBatchItem, user } from "@/lib/db/schema";
 import type { RecipeDraft } from "@/types";
 import { importRecipeFromUrl } from "./import";
 import { LLMExtractionError, LLMLimitError } from "./llm";
+import { CaptionsBlockedError } from "./youtube";
 import { attachImageFromUrl } from "./recipe-image";
-import { getRecipeById } from "./recipe";
+import { createRecipe, getRecipeById } from "./recipe";
 import {
   cancelImportBatch,
   createImportBatch,
   dismissImportBatch,
+  getImportQueuePause,
   listImportBatches,
+  queueStepsRefill,
   retryImportBatch,
   runNextImport,
 } from "./import-queue";
@@ -54,6 +57,7 @@ describe("playlist import queue", () => {
 
   beforeEach(async () => {
     vi.resetAllMocks();
+    globalThis.importWorkerState!.pausedUntil = null;
     vi.mocked(attachImageFromUrl).mockResolvedValue({ id: "img", path: "p", order: 0 });
     vi.spyOn(console, "warn").mockImplementation(() => {});
     // Leftovers from another run would be picked up first.
@@ -92,7 +96,7 @@ describe("playlist import queue", () => {
       "https://www.youtube.com/watch?v=aaaaaaaaaa2",
       "https://www.youtube.com/watch?v=aaaaaaaaaa3",
     ]);
-    expect(vi.mocked(importRecipeFromUrl).mock.calls[0][1]).toEqual({ tier: "medium" });
+    expect(vi.mocked(importRecipeFromUrl).mock.calls[0][1]).toEqual({ tier: "medium", failOnBlockedCaptions: true });
 
     const [batch] = (await listImportBatches(userId)).filter((b) => b.id === batchId);
     expect(batch.items.map((i) => i.status)).toEqual(["done", "no_recipe", "failed"]);
@@ -132,5 +136,54 @@ describe("playlist import queue", () => {
 
     expect(await dismissImportBatch(userId, batchId)).toBe(true);
     expect((await listImportBatches(userId)).some((b) => b.id === batchId)).toBe(false);
+  });
+
+  it("puts the video back and pauses when YouTube blocks the captions, instead of saving it", async () => {
+    vi.mocked(importRecipeFromUrl).mockRejectedValueOnce(new CaptionsBlockedError("blocked"));
+    const { id: batchId } = await createImportBatch(userId, { title: null, tier: "simple", videos: [video(8)] });
+
+    expect(await runNextImport()).toBe(true);
+    const [batch] = (await listImportBatches(userId)).filter((b) => b.id === batchId);
+    expect(batch.items.map((i) => [i.status, i.recipeId])).toEqual([["pending", null]]);
+    const pause = getImportQueuePause();
+    expect(pause).not.toBeNull();
+    expect(new Date(pause!).getTime() - Date.now()).toBeGreaterThan(25 * 60_000);
+  });
+
+  it("fails a video whose recipe comes without a method", async () => {
+    vi.mocked(importRecipeFromUrl).mockResolvedValueOnce({ ...draft, steps: [] });
+    const { id: batchId } = await createImportBatch(userId, { title: null, tier: "simple", videos: [video(9)] });
+
+    await drain();
+    const [batch] = (await listImportBatches(userId)).filter((b) => b.id === batchId);
+    expect(batch.items[0]).toMatchObject({ status: "failed", recipeId: null });
+    expect(batch.items[0].error).toMatch(/modo de preparo/);
+  });
+
+  it("fills in the method of the user's own video recipes that have none, without touching the rest", async () => {
+    const base = { description: null, servings: null, prepTime: null, cookTime: null, categoryIds: [], tags: [] };
+    const fromVideo = (n: number) => ({ sourceUrl: `https://www.youtube.com/watch?v=bbbbbbbbbb${n}`, videoUrl: `https://www.youtube.com/watch?v=bbbbbbbbbb${n}` });
+    const ingredients = [{ ingredientName: "fubá", quantity: 2, unit: "xíc", note: null }];
+    const { id: empty } = await createRecipe(userId, { ...base, ...fromVideo(1), title: "Meu bolo", steps: [], ingredients });
+    const { id: withSteps } = await createRecipe(userId, { ...base, ...fromVideo(2), title: "Com passos", steps: [{ text: "Asse." }], ingredients: [] });
+    const { id: noVideo } = await createRecipe(userId, { ...base, sourceUrl: null, videoUrl: null, title: "Manual", steps: [], ingredients: [] });
+    const [other] = await db.insert(user).values({ email: `other-${stamp}@example.com`, name: "Outro" }).returning({ id: user.id });
+    const { id: notMine } = await createRecipe(other.id, { ...base, ...fromVideo(3), title: "Do outro", steps: [], ingredients: [] });
+
+    try {
+      expect(await queueStepsRefill(userId, [empty, withSteps, noVideo, notMine], "medium")).toBe(1);
+      vi.mocked(importRecipeFromUrl).mockResolvedValueOnce({ ...draft, title: "Outro título", steps: [{ text: "Misture." }, { text: "Asse." }] });
+      await drain();
+
+      expect(vi.mocked(importRecipeFromUrl).mock.calls[0][0]).toBe("https://www.youtube.com/watch?v=bbbbbbbbbb1");
+      const recipe = await getRecipeById(empty);
+      expect(recipe).toMatchObject({ title: "Meu bolo", steps: [{ text: "Misture." }, { text: "Asse." }] });
+      expect(recipe!.ingredients.map((i) => i.ingredientName)).toEqual(["fubá"]);
+
+      const item = (await listImportBatches(userId)).flatMap((b) => b.items).find((i) => i.recipeId === empty);
+      expect(item).toMatchObject({ status: "done", refillSteps: true });
+    } finally {
+      await db.delete(user).where(eq(user.id, other.id));
+    }
   });
 });

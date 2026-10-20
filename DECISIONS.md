@@ -1205,3 +1205,30 @@ Multi-part recipes lost their structure on import: a risotto with "CALDO: 1 cebo
 - **Playlists mark imported videos** with an "Importada" band on the thumbnail and a link to the
   recipe; they start unchecked, the header counts them, "Marcar os novos" skips them, and choosing
   one anyway asks with the same dialog.
+
+## 2026-10-20 — Recipes imported without a method (YouTube caption block)
+
+28 of the 46 recipes from a 51-video playlist run came out with ingredients but no steps. The
+first 12 videos (09:28–09:31) all had steps; from the 13th on, YouTube answered every caption
+download with HTTP 429 and Google's "Sorry…" anti-bot page, for this home IP (the Mac and the Pi
+share it; the watch page itself still loads). Without the transcript the model only had the
+description, which usually lists ingredients but not the method, and the queue saved the recipe
+anyway. The block was still on hours later.
+
+- **Blocked captions are their own error** (`CaptionsBlockedError`, from a 429 on the caption
+  download). Interactive imports go on with the description and show a warning above the draft.
+  The queue asks `importRecipeFromUrl` to fail instead (`failOnBlockedCaptions`), before the LLM
+  call, puts the video back in the queue and pauses for 30 minutes (`BLOCKED_CAPTIONS_PAUSE_MS`);
+  the popup says it's paused and until when. The pause lives in memory: after a restart the loop
+  tries once, gets blocked again and pauses again.
+- **Videos start at least 75 s apart** (`IMPORT_SPACING_MS`), start to start: ~12 caption downloads
+  in 3.5 minutes triggered the block. A 50-video playlist now takes about an hour, on the server.
+- **A queued video whose recipe has no method fails** ("O vídeo não trouxe o modo de preparo")
+  instead of being saved looking done. Interactive imports still open the draft, where the user sees it.
+- **"Sem modo de preparo" badge** on recipe cards (`RecipeListItem.hasSteps`), and an empty state
+  on the recipe page instead of an empty list.
+- **"Buscar modo de preparo"** (on the recipe page for its author, and for all of them on "Para
+  revisar") queues the recipe's video again as a `refill_steps` item of the same queue (paced,
+  paused while blocked, shown in the popup). It only writes the steps, and only if the recipe still
+  has none when the video is read; title, ingredients and edits are left alone. Author only and
+  YouTube recipes only, since each one is an LLM call with the tier the user picks.

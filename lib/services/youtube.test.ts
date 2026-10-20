@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { parseJson3Captions, pickCaptionTrack, pickThumbnailUrl } from "./youtube";
 
 describe("pickCaptionTrack", () => {
@@ -51,5 +51,36 @@ describe("pickThumbnailUrl", () => {
   it("returns null when there are no thumbnails", () => {
     expect(pickThumbnailUrl(undefined)).toBeNull();
     expect(pickThumbnailUrl({})).toBeNull();
+  });
+});
+
+describe("fetchTranscriptText", () => {
+  it("throws CaptionsBlockedError when YouTube answers the caption download with 429", async () => {
+    vi.resetModules();
+    vi.doMock("youtubei.js", () => ({
+      Log: { setLevel: vi.fn(), Level: { ERROR: 1 } },
+      Innertube: {
+        create: async () => ({
+          getBasicInfo: async () => ({
+            captions: { caption_tracks: [{ base_url: "https://www.youtube.com/api/timedtext?v=x", language_code: "pt", kind: "asr" }] },
+          }),
+        }),
+      },
+    }));
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 429, text: async () => "<title>Sorry...</title>" });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const youtube = await import("./youtube");
+      await expect(youtube.fetchTranscriptText("x")).rejects.toBeInstanceOf(youtube.CaptionsBlockedError);
+
+      // Any other failure is still just "no transcript".
+      global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 404, text: async () => "" });
+      await expect(youtube.fetchTranscriptText("x")).resolves.toBeNull();
+    } finally {
+      global.fetch = originalFetch;
+      vi.doUnmock("youtubei.js");
+      vi.restoreAllMocks();
+    }
   });
 });

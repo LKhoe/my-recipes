@@ -12,6 +12,7 @@ import {
   ChevronUp,
   Clock,
   Loader2,
+  PauseCircle,
   RotateCcw,
   SearchX,
   X,
@@ -39,8 +40,10 @@ function countItems(items: ImportBatchItemView[]): Counts {
   };
 }
 
+type QueueState = { batches: ImportBatchView[]; pausedUntil: string | null };
+
 /** Null when the request fails (offline for a moment): the next poll or focus tries again. */
-async function fetchBatches(): Promise<ImportBatchView[] | null> {
+async function fetchBatches(): Promise<QueueState | null> {
   try {
     const res = await fetch("/api/import-batches", { cache: "no-store" });
     return res.ok ? await res.json() : null;
@@ -98,7 +101,13 @@ function ItemRow({ item, onNavigate }: { item: ImportBatchItemView; onNavigate?:
           className={cn("line-clamp-2 text-xs text-muted-foreground", item.status === "failed" && "text-destructive")}
           title={item.error ?? undefined}
         >
-          {item.status === "failed" && item.error ? `Falhou: ${item.error}` : STATUS_TEXT[item.status]}
+          {item.status === "failed" && item.error
+            ? `Falhou: ${item.error}`
+            : item.refillSteps && item.status === "done"
+              ? "Modo de preparo adicionado"
+              : item.refillSteps && item.status === "pending"
+                ? "Na fila · buscar modo de preparo"
+                : STATUS_TEXT[item.status]}
         </p>
       </div>
       <StatusIcon status={item.status} />
@@ -217,6 +226,7 @@ function BatchSection({
 export function ImportProgress() {
   const router = useRouter();
   const [batches, setBatches] = useState<ImportBatchView[]>([]);
+  const [pausedUntil, setPausedUntil] = useState<string | null>(null);
   // Nothing renders before the first fetch, so reading storage here can't mismatch the server HTML.
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -230,9 +240,11 @@ export function ImportProgress() {
 
   const load = useCallback(
     () =>
-      fetchBatches().then((next) => {
-        if (!next) return;
+      fetchBatches().then((state) => {
+        if (!state) return;
+        const next = state.batches;
         setBatches(next);
+        setPausedUntil(state.pausedUntil);
         // A new recipe changes the "Para revisar" count and lists: refresh the server components.
         // On the first fetch the page may have been rendered a moment before a video finished, so
         // it refreshes once if anything is still importing.
@@ -280,7 +292,15 @@ export function ImportProgress() {
     });
   }
 
-  const heading = counts.active ? "Importando receitas" : "Importação concluída";
+  const paused = counts.active && pausedUntil !== null;
+  const heading = paused ? "Importação pausada" : counts.active ? "Importando receitas" : "Importação concluída";
+  const pauseNotice = paused && (
+    <p className="rounded-lg bg-accent/40 px-2.5 py-2 text-xs text-accent-foreground">
+      O YouTube bloqueou as legendas por um tempo. Para não salvar receitas sem modo de preparo, a importação
+      volta a tentar às{" "}
+      {new Date(pausedUntil!).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.
+    </p>
+  );
   const sections = batches.map((batch) => (
     <BatchSection key={batch.id} batch={batch} showTitle={batches.length > 1} onChanged={load} />
   ));
@@ -300,7 +320,9 @@ export function ImportProgress() {
           className="flex w-full flex-col gap-2 px-4 py-3 text-left transition-colors hover:bg-muted/50"
         >
           <div className="flex items-center gap-2">
-            {counts.active ? (
+            {paused ? (
+              <PauseCircle className="size-4 shrink-0 text-muted-foreground" />
+            ) : counts.active ? (
               <Loader2 className="size-4 shrink-0 animate-spin text-primary" />
             ) : (
               <CheckCircle2 className="size-4 shrink-0 text-primary" />
@@ -317,6 +339,7 @@ export function ImportProgress() {
         </button>
         {!collapsed && (
           <div className="flex max-h-[min(24rem,60vh)] flex-col gap-4 overflow-y-auto border-t border-border px-2.5 py-2.5">
+            {pauseNotice}
             {sections}
           </div>
         )}
@@ -331,7 +354,11 @@ export function ImportProgress() {
           >
             <ProgressRing counts={counts} />
             <span className="font-medium text-foreground">
-              {counts.active ? `Importando ${counts.finished}/${counts.total}` : "Importação concluída"}
+              {paused
+                ? `Pausada ${counts.finished}/${counts.total}`
+                : counts.active
+                  ? `Importando ${counts.finished}/${counts.total}`
+                  : "Importação concluída"}
             </span>
           </button>
         </DialogPrimitive.Trigger>
@@ -357,6 +384,7 @@ export function ImportProgress() {
               <ProgressBar counts={counts} />
             </div>
             <div className="mt-3 flex flex-col gap-4 overflow-y-auto px-2.5 pb-4">
+              {pauseNotice}
               {batches.map((batch) => (
                 <BatchSection
                   key={batch.id}

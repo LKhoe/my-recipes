@@ -3,7 +3,12 @@ import { headers } from "next/headers";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { DEFAULT_LLM_TIER, LLM_TIERS } from "@/lib/llm-tiers";
-import { createImportBatch, listImportBatches, MAX_BATCH_VIDEOS } from "@/lib/services/import-queue";
+import {
+  createImportBatch,
+  getImportQueuePause,
+  listImportBatches,
+  MAX_BATCH_VIDEOS,
+} from "@/lib/services/import-queue";
 
 const bodySchema = z.object({
   title: z.string().max(300).nullable().default(null),
@@ -20,13 +25,19 @@ const bodySchema = z.object({
     .max(MAX_BATCH_VIDEOS),
 });
 
-/** The progress popup's data: the user's open batches with each video's status. */
+/**
+ * The progress popup's data: the user's open batches with each video's status, and when the queue
+ * resumes if it's paused because YouTube blocked the captions.
+ */
 export async function GET() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
-  return NextResponse.json(await listImportBatches(session.user.id));
+  return NextResponse.json({
+    batches: await listImportBatches(session.user.id),
+    pausedUntil: getImportQueuePause(),
+  });
 }
 
 /** Queues the videos picked from a playlist; the server imports them one by one. */

@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, exists, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db";
 import {
@@ -187,6 +187,16 @@ export async function findRecipesBySource(url: string): Promise<RecipeSourceMatc
   return (await mapRecipesBySource()).get(key) ?? [];
 }
 
+/** The ids, among these, of recipes that came from a video. */
+export async function filterVideoRecipeIds(recipeIds: string[]): Promise<Set<string>> {
+  if (recipeIds.length === 0) return new Set();
+  const rows = await db
+    .select({ id: recipe.id })
+    .from(recipe)
+    .where(and(inArray(recipe.id, recipeIds), isNotNull(recipe.videoUrl)));
+  return new Set(rows.map((r) => r.id));
+}
+
 export type RecipeListFilters = {
   /** Plain-text query, ILIKE'd against title/description/ingredient names (SPEC §4.2). */
   q?: string;
@@ -265,6 +275,7 @@ export async function listRecipes(filters: RecipeListFilters = {}): Promise<Reci
       description: recipe.description,
       authorName: user.name,
       reviewPending: recipe.reviewPending,
+      hasSteps: sql<boolean>`jsonb_array_length(${recipe.steps}) > 0`,
       createdAt: recipe.createdAt,
     })
     .from(recipe)
@@ -295,6 +306,7 @@ export async function listRecipes(filters: RecipeListFilters = {}): Promise<Reci
       imagePath: image?.path ?? null,
       categories: categoryRows.map((c) => c.name),
       reviewPending: row.reviewPending,
+      hasSteps: row.hasSteps,
       createdAt: row.createdAt.toISOString(),
     });
   }

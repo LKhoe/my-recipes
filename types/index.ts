@@ -42,6 +42,8 @@ export type RecipeDraft = {
   sourceUrl: string | null;
   videoUrl: string | null;
   imageUrl: string | null;
+  /** Something the user should know when reviewing the draft (e.g. the video's captions were blocked). */
+  warning?: string | null;
 };
 
 export type RecipeListItem = {
@@ -52,6 +54,8 @@ export type RecipeListItem = {
   imagePath: string | null;
   categories: string[];
   reviewPending: boolean;
+  /** False when the recipe has no method at all (e.g. a video imported without its captions). */
+  hasSteps: boolean;
   createdAt: string;
 };
 

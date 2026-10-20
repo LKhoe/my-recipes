@@ -7,8 +7,8 @@ import { Label } from "@/components/ui/label";
 import { CheckCircle2, ListVideo, Loader2 } from "lucide-react";
 import { AlreadyImportedDialog, type ExistingRecipe } from "@/components/recipes/AlreadyImportedDialog";
 import { PlaylistPicker, type PickerPlaylist } from "@/components/recipes/PlaylistPicker";
-import { DEFAULT_LLM_TIER, LLM_TIER_LABELS, LLM_TIERS, type LLMTier } from "@/lib/llm-tiers";
-import { cn } from "@/lib/utils";
+import { TierPicker } from "@/components/recipes/TierPicker";
+import { DEFAULT_LLM_TIER, type LLMTier } from "@/lib/llm-tiers";
 import { isYouTubePlaylistPage, parseYouTubePlaylistId } from "@/lib/youtube-utils";
 import type { RecipeDraft } from "@/types";
 
@@ -117,8 +117,9 @@ export function ImportBox({ onImported }: { onImported: (draft: RecipeDraft) => 
           {queuedCount === 1 ? "1 vídeo na fila de importação" : `${queuedCount} vídeos na fila de importação`}
         </p>
         <p className="text-sm text-muted-foreground">
-          As receitas são importadas uma a uma no servidor, então você pode sair desta página. Acompanhe o progresso
-          pelo aviso no canto da tela; cada receita fica em “Para revisar” até você conferi-la.
+          As receitas são importadas uma a uma no servidor, cerca de uma por minuto (mais rápido que isso o YouTube
+          bloqueia as legendas), então você pode sair desta página. Acompanhe o progresso pelo aviso no canto da
+          tela; cada receita fica em “Para revisar” até você conferi-la.
         </p>
         <Button
           type="button"
@@ -179,30 +180,12 @@ export function ImportBox({ onImported }: { onImported: (draft: RecipeDraft) => 
         </div>
       )}
       {/* Only used when the page has no structured recipe data and the AI has to read it */}
-      <div className="flex flex-col gap-1.5">
-        <span id="import-tier-label" className="text-xs text-muted-foreground">
-          IA para ler a página, quando ela não traz a receita estruturada
-        </span>
-        <div role="radiogroup" aria-labelledby="import-tier-label" className="flex flex-wrap gap-2">
-          {LLM_TIERS.map((t) => (
-            <Button
-              key={t}
-              type="button"
-              role="radio"
-              aria-checked={tier === t}
-              size="sm"
-              variant={tier === t ? "default" : "outline"}
-              disabled={busy}
-              onClick={() => setTier(t)}
-            >
-              {LLM_TIER_LABELS[t].label}
-              <span className={cn("text-xs", tier === t ? "opacity-80" : "text-muted-foreground")}>
-                {LLM_TIER_LABELS[t].hint}
-              </span>
-            </Button>
-          ))}
-        </div>
-      </div>
+      <TierPicker
+        label="IA para ler a página, quando ela não traz a receita estruturada"
+        value={tier}
+        onChange={setTier}
+        disabled={busy}
+      />
       {loading && (
         <div className="flex flex-col gap-1.5">
           <div className="h-1 w-full overflow-hidden rounded-full bg-muted">

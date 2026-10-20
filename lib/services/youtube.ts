@@ -4,6 +4,13 @@ export { parseYouTubeVideoId, isYouTubeUrl } from "@/lib/youtube-utils";
 
 export class YouTubePlaylistError extends Error {}
 
+/**
+ * YouTube answered the caption download with 429 and its "Sorry…" anti-bot page: the server's IP
+ * is temporarily blocked from captions (the video itself still loads). Happened after ~12 caption
+ * downloads in 3.5 minutes during a playlist import; it lasts hours.
+ */
+export class CaptionsBlockedError extends Error {}
+
 export type YouTubeVideoMetadata = {
   title: string;
   description: string;
@@ -169,6 +176,7 @@ export function parseJson3Captions(json: { events?: { segs?: { utf8?: string }[]
  * audio processing. Reads the caption track directly: Innertube's `get_transcript` endpoint
  * (`info.getTranscript()`) now answers HTTP 400, and the WEB client's caption URLs need a PO token
  * (they return an empty body without one). The ANDROID client's caption URLs work as-is.
+ * Throws CaptionsBlockedError when YouTube blocks the download; any other failure is null.
  */
 export async function fetchTranscriptText(videoId: string): Promise<string | null> {
   try {
@@ -183,6 +191,9 @@ export async function fetchTranscriptText(videoId: string): Promise<string | nul
     const captionsUrl = new URL(track.base_url);
     captionsUrl.searchParams.set("fmt", "json3");
     const res = await fetch(captionsUrl);
+    if (res.status === 429) {
+      throw new CaptionsBlockedError("O YouTube bloqueou temporariamente o acesso às legendas.");
+    }
     const body = res.ok ? await res.text() : "";
     if (!body) {
       console.warn(`[youtube] ${videoId}: caption download failed (HTTP ${res.status}, ${body.length} bytes)`);
@@ -196,6 +207,10 @@ export async function fetchTranscriptText(videoId: string): Promise<string | nul
     }
     return text;
   } catch (err) {
+    if (err instanceof CaptionsBlockedError) {
+      console.warn(`[youtube] ${videoId}: captions blocked (HTTP 429)`);
+      throw err;
+    }
     console.warn(`[youtube] ${videoId}: transcript fetch failed:`, err);
     return null;
   }

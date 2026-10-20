@@ -28,10 +28,19 @@ export function RecipeCard({ recipe, index = 0 }: { recipe: RecipeListItem; inde
             <ChefHat className="size-10" />
           </div>
         )}
-        {recipe.reviewPending && (
-          <span className="absolute left-2 top-2 rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground shadow-soft">
-            Pendente de revisão
-          </span>
+        {(recipe.reviewPending || !recipe.hasSteps) && (
+          <div className="absolute left-2 top-2 flex flex-wrap gap-1.5">
+            {recipe.reviewPending && (
+              <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground shadow-soft">
+                Pendente de revisão
+              </span>
+            )}
+            {!recipe.hasSteps && (
+              <span className="rounded-full bg-destructive px-2 py-0.5 text-xs font-medium text-white shadow-soft">
+                Sem modo de preparo
+              </span>
+            )}
+          </div>
         )}
       </div>
       <div className="flex flex-1 flex-col gap-1.5 p-4">

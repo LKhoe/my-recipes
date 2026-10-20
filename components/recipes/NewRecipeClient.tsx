@@ -32,13 +32,20 @@ export function NewRecipeClient({ categories }: { categories: { id: string; name
 
   if (draft?.recipeFound) {
     return (
-      <RecipeForm
-        mode="create"
-        categories={categories}
-        initialValues={draftToFormValues(draft)}
-        initialRemoteImageUrl={draft.imageUrl}
-        imported
-      />
+      <div className="flex flex-col gap-4">
+        {draft.warning && (
+          <p role="status" className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
+            {draft.warning}
+          </p>
+        )}
+        <RecipeForm
+          mode="create"
+          categories={categories}
+          initialValues={draftToFormValues(draft)}
+          initialRemoteImageUrl={draft.imageUrl}
+          imported
+        />
+      </div>
     );
   }
 
@@ -80,9 +87,14 @@ export function NewRecipeClient({ categories }: { categories: { id: string; name
                   videoUrl: result.videoUrl,
                 },
                 imageUrl: result.imageUrl,
-                notice: result.videoUrl
-                  ? "Não encontramos uma receita neste vídeo, então abrimos a entrada manual com o título e o link do vídeo já preenchidos."
-                  : "Não encontramos uma receita nesta página, então abrimos a entrada manual com o link já preenchido.",
+                notice: [
+                  result.videoUrl
+                    ? "Não encontramos uma receita neste vídeo, então abrimos a entrada manual com o título e o link do vídeo já preenchidos."
+                    : "Não encontramos uma receita nesta página, então abrimos a entrada manual com o link já preenchido.",
+                  result.warning,
+                ]
+                  .filter(Boolean)
+                  .join(" "),
               });
             }
           }}
