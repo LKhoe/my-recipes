@@ -2,7 +2,16 @@ import { eq } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { user } from "@/lib/db/schema";
-import { countPendingReview, createRecipe, getRecipeById, listRecipes, markRecipeReviewed, updateRecipe } from "./recipe";
+import {
+  countPendingReview,
+  createRecipe,
+  findRecipesBySource,
+  getRecipeById,
+  listRecipes,
+  markRecipeReviewed,
+  softDeleteRecipe,
+  updateRecipe,
+} from "./recipe";
 import { generateShoppingList, getLatestShoppingList } from "./shopping-list";
 
 // Integration test — hits the real dev database (per this project's convention: verify against
@@ -222,5 +231,57 @@ describe("ingredient alternatives and review", () => {
     const { id: second } = await createRecipe(authorId, input, { reviewPending: true });
     expect(await markRecipeReviewed(second, authorId)).toBe(true);
     expect((await getRecipeById(second))!.reviewPending).toBe(false);
+  });
+});
+
+describe("findRecipesBySource", () => {
+  const stamp = Date.now();
+  let userId: string;
+
+  afterAll(async () => {
+    if (userId) await db.delete(user).where(eq(user.id, userId));
+  });
+
+  it("finds a recipe by its page or video however the link is written, and skips deleted ones", async () => {
+    const [created] = await db
+      .insert(user)
+      .values({ email: `by-source-${stamp}@example.com`, name: "Fonte" })
+      .returning({ id: user.id });
+    userId = created.id;
+    const video = `v${String(stamp).slice(-10)}`;
+    const base = {
+      description: null,
+      servings: null,
+      prepTime: null,
+      cookTime: null,
+      steps: [],
+      ingredients: [],
+      categoryIds: [],
+      tags: [],
+    };
+    const { id: fromVideo } = await createRecipe(userId, {
+      ...base,
+      title: "Do vídeo",
+      sourceUrl: `https://www.youtube.com/watch?v=${video}`,
+      videoUrl: `https://www.youtube.com/watch?v=${video}`,
+    });
+    const { id: fromPage } = await createRecipe(userId, {
+      ...base,
+      title: "Da página",
+      sourceUrl: `https://www.site-${stamp}.com.br/receita/pudim/`,
+      videoUrl: null,
+    });
+
+    expect(await findRecipesBySource(`https://youtu.be/${video}?t=12`)).toEqual([
+      { id: fromVideo, title: "Do vídeo", authorName: "Fonte" },
+    ]);
+    expect((await findRecipesBySource(`http://site-${stamp}.com.br/receita/pudim?utm_source=x`)).map((r) => r.id)).toEqual([
+      fromPage,
+    ]);
+    expect(await findRecipesBySource(`https://site-${stamp}.com.br/receita/bolo`)).toEqual([]);
+    expect(await findRecipesBySource("não é um link")).toEqual([]);
+
+    await softDeleteRecipe(fromPage, userId);
+    expect(await findRecipesBySource(`https://site-${stamp}.com.br/receita/pudim`)).toEqual([]);
   });
 });

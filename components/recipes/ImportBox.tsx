@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CheckCircle2, ListVideo, Loader2 } from "lucide-react";
+import { AlreadyImportedDialog, type ExistingRecipe } from "@/components/recipes/AlreadyImportedDialog";
 import { PlaylistPicker, type PickerPlaylist } from "@/components/recipes/PlaylistPicker";
 import { DEFAULT_LLM_TIER, LLM_TIER_LABELS, LLM_TIERS, type LLMTier } from "@/lib/llm-tiers";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ export function ImportBox({ onImported }: { onImported: (draft: RecipeDraft) => 
   const [playlist, setPlaylist] = useState<PickerPlaylist | null>(null);
   const [loadingPlaylist, setLoadingPlaylist] = useState(false);
   const [queuedCount, setQueuedCount] = useState<number | null>(null);
+  const [duplicates, setDuplicates] = useState<ExistingRecipe[] | null>(null);
 
   // A video watched inside a playlist (watch?v=…&list=…) imports as that one video, with the
   // whole playlist one click away; a playlist page goes straight to the picker.
@@ -67,6 +69,26 @@ export function ImportBox({ onImported }: { onImported: (draft: RecipeDraft) => 
       await loadPlaylist();
       return;
     }
+    setError(null);
+    setLoading(true);
+    setElapsedSeconds(0);
+
+    // A link that already became a recipe asks first, before spending an import on it. If the
+    // check itself fails, the import goes ahead.
+    const existing = await fetch(`/api/recipes/by-source?url=${encodeURIComponent(url)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => (body?.recipes ?? []) as ExistingRecipe[])
+      .catch(() => []);
+    if (existing.length > 0) {
+      setLoading(false);
+      setDuplicates(existing);
+      return;
+    }
+    await runImport();
+  }
+
+  async function runImport() {
+    setDuplicates(null);
     setError(null);
     setLoading(true);
     setElapsedSeconds(0);
@@ -192,6 +214,18 @@ export function ImportBox({ onImported }: { onImported: (draft: RecipeDraft) => 
         </div>
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}
+      <AlreadyImportedDialog
+        open={duplicates !== null}
+        recipes={duplicates ?? []}
+        description={
+          duplicates?.length === 1
+            ? "Este link já foi importado e virou a receita abaixo. Importar de novo cria uma receita repetida."
+            : "Este link já foi importado e virou as receitas abaixo. Importar de novo cria uma receita repetida."
+        }
+        confirmLabel="Importar mesmo assim"
+        onConfirm={() => void runImport()}
+        onCancel={() => setDuplicates(null)}
+      />
       {playlist && (
         <PlaylistPicker
           playlist={playlist}

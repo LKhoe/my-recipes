@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, exists, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db";
 import {
@@ -16,6 +16,7 @@ import { findOrCreateIngredient } from "@/lib/services/ingredient";
 import { cleanAlternativeFlags } from "@/lib/ingredient-alternatives";
 import { normalizeGroupLabel } from "@/lib/ingredient-groups";
 import { normalizeUnit } from "@/lib/services/ingredient-parser";
+import { sourceKey } from "@/lib/source-url";
 import { findOrCreateTag } from "@/lib/services/tag";
 import type { RecipeDetail, RecipeInput, RecipeListItem } from "@/types";
 
@@ -145,6 +146,45 @@ export async function countPendingReview(userId: string): Promise<number> {
     .from(recipe)
     .where(and(eq(recipe.authorId, userId), eq(recipe.reviewPending, true), isNull(recipe.deletedAt)));
   return row?.count ?? 0;
+}
+
+export type RecipeSourceMatch = { id: string; title: string; authorName: string | null };
+
+/**
+ * Every recipe in the collection by the key of its source page and video (lib/source-url.ts), to
+ * tell the user a link was already imported. Compared in code, not SQL, since the same link can be
+ * written many ways; a few hundred rows at this app's scale.
+ */
+export async function mapRecipesBySource(): Promise<Map<string, RecipeSourceMatch[]>> {
+  const rows = await db
+    .select({
+      id: recipe.id,
+      title: recipe.title,
+      authorName: user.name,
+      sourceUrl: recipe.sourceUrl,
+      videoUrl: recipe.videoUrl,
+    })
+    .from(recipe)
+    .leftJoin(user, eq(recipe.authorId, user.id))
+    .where(and(isNull(recipe.deletedAt), or(isNotNull(recipe.sourceUrl), isNotNull(recipe.videoUrl))))
+    .orderBy(desc(recipe.createdAt));
+
+  const byKey = new Map<string, RecipeSourceMatch[]>();
+  for (const row of rows) {
+    const keys = new Set([sourceKey(row.sourceUrl), sourceKey(row.videoUrl)]);
+    for (const key of keys) {
+      if (!key) continue;
+      byKey.set(key, [...(byKey.get(key) ?? []), { id: row.id, title: row.title, authorName: row.authorName }]);
+    }
+  }
+  return byKey;
+}
+
+/** The recipes already imported from this page or video, newest first. */
+export async function findRecipesBySource(url: string): Promise<RecipeSourceMatch[]> {
+  const key = sourceKey(url);
+  if (!key) return [];
+  return (await mapRecipesBySource()).get(key) ?? [];
 }
 
 export type RecipeListFilters = {

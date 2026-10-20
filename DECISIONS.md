@@ -1191,3 +1191,17 @@ Multi-part recipes lost their structure on import: a risotto with "CALDO: 1 cebo
   `navigator.clipboard.read()` where it exists (it asks for permission, and is how phones paste).
 - **Header**: five links didn't fit between `sm` and `lg` (it already overflowed at 700px with
   four), so that range shows the short labels and the avatar without the user's name.
+
+## 2026-10-20 — Already-imported links
+
+- **One key per source** (`sourceKey`, `lib/source-url.ts`): `yt:<id>` for any way of writing a
+  YouTube link (`youtu.be`, `shorts`, `&t=`, `&list=`), and host + path + query for a page, without
+  protocol, `www.`, trailing slash, hash or tracking parameters (`utm_*`, `fbclid`, …). Recipes are
+  matched against both `sourceUrl` and `videoUrl`, in code rather than SQL, since the same link has
+  many spellings; a few hundred rows at this scale.
+- **A single link asks before importing** (`GET /api/recipes/by-source`, checked by the import box
+  before it spends an import): a dialog lists the recipes already made from it (any member's, open
+  in a new tab) with "Cancelar" / "Importar mesmo assim". If the check fails, the import goes on.
+- **Playlists mark imported videos** with an "Importada" band on the thumbnail and a link to the
+  recipe; they start unchecked, the header counts them, "Marcar os novos" skips them, and choosing
+  one anyway asks with the same dialog.

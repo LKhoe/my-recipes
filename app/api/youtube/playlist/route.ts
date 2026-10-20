@@ -1,23 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { and, isNotNull, isNull } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { recipe } from "@/lib/db/schema";
 import { listQueuedVideoIds } from "@/lib/services/import-queue";
+import { mapRecipesBySource } from "@/lib/services/recipe";
 import { fetchPlaylist, YouTubePlaylistError } from "@/lib/services/youtube";
-import { parseYouTubePlaylistId, parseYouTubeVideoId } from "@/lib/youtube-utils";
+import { sourceKey } from "@/lib/source-url";
+import { parseYouTubePlaylistId, youTubeWatchUrl } from "@/lib/youtube-utils";
 
-/** Video ids that already have a recipe in the collection (by anyone in the circle). */
-async function importedVideoIds(): Promise<Set<string>> {
-  const rows = await db
-    .select({ videoUrl: recipe.videoUrl })
-    .from(recipe)
-    .where(and(isNull(recipe.deletedAt), isNotNull(recipe.videoUrl)));
-  return new Set(rows.map((r) => (r.videoUrl ? parseYouTubeVideoId(r.videoUrl) : null)).filter((id) => id !== null));
-}
-
-/** A playlist's videos for the import picker, each flagged if it's already a recipe or queued. */
+/** A playlist's videos for the import picker, each with the recipe already made from it, if any. */
 export async function GET(request: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
@@ -30,16 +20,17 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const [playlist, imported, queued] = await Promise.all([
+    const [playlist, bySource, queued] = await Promise.all([
       fetchPlaylist(playlistId),
-      importedVideoIds(),
+      mapRecipesBySource(),
       listQueuedVideoIds(session.user.id),
     ]);
     return NextResponse.json({
       ...playlist,
       videos: playlist.videos.map((v) => ({
         ...v,
-        alreadyImported: imported.has(v.videoId),
+        // The newest recipe made from this video (by any member), if any.
+        existingRecipe: bySource.get(sourceKey(youTubeWatchUrl(v.videoId))!)?.[0] ?? null,
         queued: queued.has(v.videoId),
       })),
     });
