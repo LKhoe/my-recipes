@@ -55,7 +55,7 @@ redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`). Email/password work
 | `TZ` | no | Server timezone, default `America/Sao_Paulo` — decides "today" for the meal plan |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | Enables Google sign-in |
 | `LLM_BASE_URL` / `LLM_API_KEY` | no (Phase 1+) | LLM import fallback, through LocalInfra's LLM gateway (`provision-app.sh ... --llm`) |
-| `YOUTUBE_API_KEY` | no (Phase 1+) | YouTube description fetch; transcripts need no key |
+| `YOUTUBE_API_KEY` | no (Phase 1+) | YouTube description fetch and playlist listing (playlist import needs it); transcripts need no key |
 | `ALEXA_API_TOKEN` | no (Phase 4+) | Shared-secret bearer token for `/api/alexa/*` |
 
 ## Scripts

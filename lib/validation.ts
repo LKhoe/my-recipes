@@ -29,6 +29,7 @@ export const recipeIngredientInputSchema = z.object({
     .nullable()
     .optional()
     .transform((v) => v?.trim() || null),
+  alternative: z.boolean().optional(),
   inferred: z.boolean().optional(),
 });
 
@@ -44,4 +45,15 @@ export const recipeInputSchema = z.object({
   tags: z.array(z.string().min(1).max(50)),
   sourceUrl: z.string().url().nullable(),
   videoUrl: z.string().url().nullable(),
+});
+
+// POST /api/recipes: an imported draft is saved as pending review unless the user marks it
+// reviewed on the way in.
+export const createRecipeSchema = recipeInputSchema.extend({
+  reviewPending: z.boolean().default(false),
+});
+
+// PATCH /api/recipes/[id]: `markReviewed` clears the pending-review flag (author only).
+export const updateRecipeSchema = recipeInputSchema.extend({
+  markReviewed: z.boolean().optional(),
 });

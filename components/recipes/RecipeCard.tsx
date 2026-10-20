@@ -28,6 +28,11 @@ export function RecipeCard({ recipe, index = 0 }: { recipe: RecipeListItem; inde
             <ChefHat className="size-10" />
           </div>
         )}
+        {recipe.reviewPending && (
+          <span className="absolute left-2 top-2 rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground shadow-soft">
+            Pendente de revisão
+          </span>
+        )}
       </div>
       <div className="flex flex-1 flex-col gap-1.5 p-4">
         <h3 className="font-display text-display-sm leading-snug text-foreground">{recipe.title}</h3>

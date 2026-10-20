@@ -75,6 +75,31 @@ describe("parseIngredientLine", () => {
     const result = parseIngredientLine("1 lata (400g) de tomate picado");
     expect(result.quantity).toBe(1);
     expect(result.note).toBe("400g");
+    expect(result.name).toBe("tomate picado");
+  });
+
+  it("drops the 'de' between the unit and the name", () => {
+    expect(parseIngredientLine("2 xícaras de farinha de trigo")).toEqual({
+      quantity: 2,
+      unit: "xíc",
+      name: "farinha de trigo",
+      note: null,
+    });
+    expect(parseIngredientLine("1 cup of flour").name).toBe("flour");
+  });
+
+  it("reads a Brazilian mixed number and the standard 'xícara (chá)' cup", () => {
+    expect(parseIngredientLine("2 e 1/2 xícaras (chá) de farinha de trigo")).toEqual({
+      quantity: 2.5,
+      unit: "xíc",
+      name: "farinha de trigo",
+      note: null,
+    });
+    expect(parseIngredientLine("1/2 xícara de chá de óleo")).toMatchObject({ quantity: 0.5, unit: "xíc", name: "óleo" });
+  });
+
+  it("reads '2 ou 3 ovos' as a range", () => {
+    expect(parseIngredientLine("2 ou 3 ovos")).toEqual({ quantity: 2, unit: null, name: "ovos", note: null });
   });
 
   it("falls back to treating the whole line as the name when no quantity is found", () => {

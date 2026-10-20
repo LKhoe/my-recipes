@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCountdown, formatIngredientLine } from "./format";
+import { formatCountdown, formatIngredientChoice, formatIngredientLine } from "./format";
 
 describe("formatIngredientLine", () => {
   it("formats an unscaled ingredient line with unit and note", () => {
@@ -39,5 +39,30 @@ describe("formatCountdown", () => {
     expect(formatCountdown(3600)).toBe("1:00:00");
     expect(formatCountdown(90 * 60 + 5)).toBe("1:30:05");
     expect(formatCountdown(20160 * 60)).toBe("336:00:00");
+  });
+});
+
+describe("formatIngredientChoice", () => {
+  const item = (ingredientName: string, quantity: number | null, unit: string | null, note: string | null = null) => ({
+    ingredientName,
+    quantity,
+    unit,
+    note,
+  });
+
+  it("says a shared amount once", () => {
+    expect(formatIngredientChoice(item("manteiga", 100, "g"), [item("margarina", 100, "g")])).toBe(
+      "100 g manteiga ou margarina",
+    );
+  });
+
+  it("gives an option its own amount when it differs, scaled like the rest", () => {
+    expect(formatIngredientChoice(item("leite", 1, "xíc"), [item("água", 200, "ml")], 2)).toBe(
+      "2 xíc leite ou 400 ml água",
+    );
+  });
+
+  it("is the plain line when there are no options", () => {
+    expect(formatIngredientChoice(item("sal", null, null, "a gosto"), [])).toBe("sal (a gosto)");
   });
 });

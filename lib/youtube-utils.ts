@@ -26,6 +26,40 @@ export function isYouTubeUrl(url: string): boolean {
   return parseYouTubeVideoId(url) !== null;
 }
 
+// Lists that aren't a fixed set of videos someone made: "RD…" mixes are generated per viewer,
+// "LL"/"WL"/"UL…" are a user's private liked/watch-later lists, which the API won't return.
+const NON_PLAYLIST_LIST_ID = /^(?:RD|UL|LL$|WL$)/;
+
+/**
+ * The playlist id of a YouTube link: `youtube.com/playlist?list=…`, or a video watched inside a
+ * playlist (`watch?v=…&list=…`). Null for anything else, including auto-generated mixes.
+ */
+export function parseYouTubePlaylistId(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^(?:www|m|music)\./, "");
+    if (host !== "youtube.com" && host !== "youtu.be") return null;
+    const list = parsed.searchParams.get("list");
+    if (!list || NON_PLAYLIST_LIST_ID.test(list) || !/^[\w-]+$/.test(list)) return null;
+    return list;
+  } catch {
+    return null;
+  }
+}
+
+/** A playlist page link (`/playlist?list=…`), as opposed to a single video that sits in one. */
+export function isYouTubePlaylistPage(url: string): boolean {
+  try {
+    return new URL(url).pathname === "/playlist" && parseYouTubePlaylistId(url) !== null;
+  } catch {
+    return false;
+  }
+}
+
+export function youTubeWatchUrl(videoId: string): string {
+  return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
 /**
  * A video title as a recipe title: drops the channel suffix after "//" or "|" ("CORAÇÃO DE BOI
  * ACEBOLADO// receitas,casa e coisas." -> "CORAÇÃO DE BOI ACEBOLADO") and turns an all-caps title

@@ -18,6 +18,7 @@ import { PrivateNotes } from "@/components/recipes/PrivateNotes";
 import { CookPhotoGallery } from "@/components/recipes/CookPhotoGallery";
 import { RecipeSteps } from "@/components/recipes/RecipeSteps";
 import { GeneralTips } from "@/components/recipes/GeneralTips";
+import { ReviewPendingNotice } from "@/components/recipes/ReviewPendingNotice";
 import { Pencil, ChefHat, Clock, Users } from "lucide-react";
 
 export default async function RecipeDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -88,6 +89,10 @@ export default async function RecipeDetailPage({ params }: { params: Promise<{ i
           </div>
         )}
       </div>
+
+      {recipe.reviewPending && (
+        <ReviewPendingNotice recipeId={recipe.id} canReview={isAuthor} authorName={recipe.authorName} />
+      )}
 
       {session?.user && (
         <div className="mt-2">

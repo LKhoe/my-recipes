@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanIngredientNote, extractRecipeWithLLM, LLMExtractionError } from "./llm";
+import { cleanIngredientNote, extractRecipeWithLLM, LLMExtractionError, LLMLimitError } from "./llm";
 
 function mockLLMResponse(content: unknown) {
   return {
@@ -93,7 +93,50 @@ describe("extractRecipeWithLLM", () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     const systemPrompt: string = body.messages[0].content;
     expect(systemPrompt).toContain('"group": string | null');
-    expect(systemPrompt).toContain("never add the amounts together");
+    expect(systemPrompt).toContain("never summed");
+  });
+
+  it("turns each alternative into an option row right after its ingredient", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      mockLLMResponse({
+        recipeFound: true,
+        title: "Bolo",
+        steps: [{ text: "Misture." }],
+        ingredients: [
+          {
+            ingredientName: "manteiga",
+            quantity: 100,
+            unit: "g",
+            note: null,
+            group: "MASSA:",
+            alternatives: [{ ingredientName: "margarina", quantity: 100, unit: "g", note: null }, { ingredientName: " " }],
+            inferred: false,
+          },
+          { ingredientName: "sal", quantity: null, unit: null, note: "a gosto", alternatives: [], inferred: false },
+        ],
+      }),
+    ) as unknown as typeof fetch;
+
+    const draft = await extractRecipeWithLLM("...", { context: "webpage", allowEstimation: false, sourceUrl: null, videoUrl: null });
+
+    expect(draft.ingredients).toEqual([
+      { ingredientName: "manteiga", quantity: 100, unit: "g", note: null, group: "Massa", inferred: false },
+      { ingredientName: "margarina", quantity: 100, unit: "g", note: null, group: "Massa", alternative: true, inferred: false },
+      { ingredientName: "sal", quantity: null, unit: null, note: "a gosto", group: null, inferred: false },
+    ]);
+  });
+
+  it("tells the model the title, brand and preposition rules", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockLLMResponse({ recipeFound: false }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await extractRecipeWithLLM("...", { context: "webpage", allowEstimation: false, sourceUrl: null, videoUrl: null });
+
+    const systemPrompt: string = JSON.parse(fetchMock.mock.calls[0][1].body).messages[0].content;
+    expect(systemPrompt).toContain('Never start with "Receita de"');
+    expect(systemPrompt).toContain("Never mention brands");
+    expect(systemPrompt).toContain('("farinha", not "de farinha")');
+    expect(systemPrompt).toContain('"alternatives"');
   });
 
   it("drops a unit that comes without a quantity", async () => {
@@ -229,6 +272,9 @@ describe("extractRecipeWithLLM", () => {
     await expect(
       extractRecipeWithLLM("text", { context: "webpage", allowEstimation: false, sourceUrl: null, videoUrl: null }),
     ).rejects.toThrow(/limite de uso da IA/);
+    await expect(
+      extractRecipeWithLLM("text", { context: "webpage", allowEstimation: false, sourceUrl: null, videoUrl: null }),
+    ).rejects.toBeInstanceOf(LLMLimitError);
   });
 
   it("throws LLMExtractionError when the LLM gateway can't be reached", async () => {

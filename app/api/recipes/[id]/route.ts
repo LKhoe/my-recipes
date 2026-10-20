@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { getRecipeById, softDeleteRecipe, updateRecipe } from "@/lib/services/recipe";
-import { recipeInputSchema } from "@/lib/validation";
+import { updateRecipeSchema } from "@/lib/validation";
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -32,12 +32,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: "Receita não encontrada" }, { status: 404 });
   }
 
-  const parsed = recipeInputSchema.safeParse(await request.json().catch(() => null));
+  const parsed = updateRecipeSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Dados da receita inválidos." }, { status: 400 });
   }
 
-  await updateRecipe(id, parsed.data);
+  const { markReviewed, ...input } = parsed.data;
+  // Any member can edit a recipe, but only its author can sign off on an imported one.
+  if (markReviewed && existing.authorId !== session.user.id) {
+    return NextResponse.json({ error: "Só quem enviou a receita pode marcá-la como revisada." }, { status: 403 });
+  }
+
+  await updateRecipe(id, input, { markReviewed });
   return NextResponse.json({ ok: true });
 }
 

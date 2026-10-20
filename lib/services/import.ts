@@ -1,4 +1,5 @@
-import { fetchPageHtml, stripToReadableText } from "@/lib/services/html-fetch";
+import { cleanImportedIngredients, cleanRecipeTitle, removeBrands } from "@/lib/import-cleanup";
+import { extractMetaImageUrl, fetchPageHtml, resolveImageUrl, stripToReadableText } from "@/lib/services/html-fetch";
 import { extractRecipeFromJsonLd } from "@/lib/services/jsonld";
 import type { LLMTier } from "@/lib/llm-tiers";
 import { extractRecipeWithLLM } from "@/lib/services/llm";
@@ -6,12 +7,31 @@ import { fetchTranscriptText, fetchVideoMetadata, isYouTubeUrl, parseYouTubeVide
 import { cleanVideoTitle } from "@/lib/youtube-utils";
 import type { RecipeDraft } from "@/types";
 
+/**
+ * The last word on every draft, whichever path made it: no "Receita de" in the title, no brands,
+ * no leading "de" on ingredient names, and "manteiga ou margarina" split into an option (see
+ * lib/import-cleanup.ts).
+ */
+export function finalizeDraft(draft: RecipeDraft): RecipeDraft {
+  if (!draft.recipeFound) return { ...draft, title: cleanRecipeTitle(draft.title) };
+  return {
+    ...draft,
+    title: cleanRecipeTitle(removeBrands(draft.title)),
+    steps: draft.steps.map((step) => ({ ...step, text: removeBrands(step.text) })),
+    ingredients: cleanImportedIngredients(draft.ingredients),
+  };
+}
+
 async function importFromWebpage(url: string, tier?: LLMTier): Promise<RecipeDraft> {
   const html = await fetchPageHtml(url);
+  // The share image is the fallback photo: JSON-LD sometimes has none, the LLM never returns one.
+  const metaImageUrl = extractMetaImageUrl(html, url);
 
   // SPEC §4.6: JSON-LD first (deterministic, free, instant) — expected to cover most sites.
   const jsonLdDraft = extractRecipeFromJsonLd(html, url);
-  if (jsonLdDraft) return jsonLdDraft;
+  if (jsonLdDraft) {
+    return { ...jsonLdDraft, imageUrl: resolveImageUrl(jsonLdDraft.imageUrl, url) ?? metaImageUrl };
+  }
 
   // Fallback: strip to readable text and hand it to the LLM.
   const text = stripToReadableText(html);
@@ -20,6 +40,7 @@ async function importFromWebpage(url: string, tier?: LLMTier): Promise<RecipeDra
     allowEstimation: false,
     sourceUrl: url,
     videoUrl: null,
+    imageUrl: metaImageUrl,
     tier,
   });
 }
@@ -78,6 +99,6 @@ async function importFromYouTube(url: string, tier?: LLMTier): Promise<RecipeDra
 
 // tier: which LLM tier reads the page when it has no JSON-LD (the user's choice on import)
 export async function importRecipeFromUrl(url: string, opts: { tier?: LLMTier } = {}): Promise<RecipeDraft> {
-  if (isYouTubeUrl(url)) return importFromYouTube(url, opts.tier);
-  return importFromWebpage(url, opts.tier);
+  const draft = isYouTubeUrl(url) ? await importFromYouTube(url, opts.tier) : await importFromWebpage(url, opts.tier);
+  return finalizeDraft(draft);
 }

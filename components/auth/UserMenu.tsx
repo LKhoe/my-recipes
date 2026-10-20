@@ -30,7 +30,7 @@ export function UserMenu({
         {image && <AvatarImage src={image} alt={name ?? email} />}
         <AvatarFallback>{initials}</AvatarFallback>
       </Avatar>
-      <div className="hidden text-sm sm:block">
+      <div className="hidden text-sm lg:block">
         <p className="font-medium leading-tight">{name || email}</p>
       </div>
       <Button variant="ghost" size="sm" onClick={handleSignOut}>

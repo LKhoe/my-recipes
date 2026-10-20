@@ -7,6 +7,7 @@ import { importRecipeFromUrl } from "@/lib/services/import";
 import { PageFetchError } from "@/lib/services/html-fetch";
 import { DEFAULT_LLM_TIER, LLM_TIERS } from "@/lib/llm-tiers";
 import { LLMExtractionError } from "@/lib/services/llm";
+import { isYouTubePlaylistPage } from "@/lib/youtube-utils";
 
 // LLM extraction can take 30-60s (SPEC §4.6 operational constraints).
 export const maxDuration = 60;
@@ -30,6 +31,10 @@ export async function POST(request: NextRequest) {
   const parsedBody = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsedBody.success) {
     return NextResponse.json({ error: "Uma URL válida é obrigatória." }, { status: 400 });
+  }
+  // A playlist goes through the picker and the import queue (/api/import-batches), not here.
+  if (isYouTubePlaylistPage(parsedBody.data.url)) {
+    return NextResponse.json({ error: "Esse link é de uma playlist: escolha os vídeos para importar." }, { status: 400 });
   }
 
   try {

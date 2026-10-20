@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
+import { CheckCircle2, ListVideo, Loader2 } from "lucide-react";
+import { PlaylistPicker, type PickerPlaylist } from "@/components/recipes/PlaylistPicker";
 import { DEFAULT_LLM_TIER, LLM_TIER_LABELS, LLM_TIERS, type LLMTier } from "@/lib/llm-tiers";
 import { cn } from "@/lib/utils";
+import { isYouTubePlaylistPage, parseYouTubePlaylistId } from "@/lib/youtube-utils";
 import type { RecipeDraft } from "@/types";
 
 // Cross-faded status copy while an import is in flight — roughly matches the real pipeline
@@ -26,6 +28,14 @@ export function ImportBox({ onImported }: { onImported: (draft: RecipeDraft) => 
   const [loading, setLoading] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [playlist, setPlaylist] = useState<PickerPlaylist | null>(null);
+  const [loadingPlaylist, setLoadingPlaylist] = useState(false);
+  const [queuedCount, setQueuedCount] = useState<number | null>(null);
+
+  // A video watched inside a playlist (watch?v=…&list=…) imports as that one video, with the
+  // whole playlist one click away; a playlist page goes straight to the picker.
+  const inPlaylist = parseYouTubePlaylistId(url) !== null;
+  const isPlaylistPage = isYouTubePlaylistPage(url);
 
   const phase = [...IMPORT_PHASES].reverse().find((p) => elapsedSeconds >= p.atSeconds) ?? IMPORT_PHASES[0];
 
@@ -36,8 +46,27 @@ export function ImportBox({ onImported }: { onImported: (draft: RecipeDraft) => 
     return () => clearInterval(interval);
   }, [loading]);
 
+  async function loadPlaylist() {
+    setError(null);
+    setLoadingPlaylist(true);
+    try {
+      const res = await fetch(`/api/youtube/playlist?url=${encodeURIComponent(url)}`);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error ?? "Não foi possível carregar a playlist.");
+      setPlaylist(body as PickerPlaylist);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoadingPlaylist(false);
+    }
+  }
+
   async function handleImport(e: React.FormEvent) {
     e.preventDefault();
+    if (isPlaylistPage) {
+      await loadPlaylist();
+      return;
+    }
     setError(null);
     setLoading(true);
     setElapsedSeconds(0);
@@ -58,9 +87,38 @@ export function ImportBox({ onImported }: { onImported: (draft: RecipeDraft) => 
     }
   }
 
+  if (queuedCount !== null) {
+    return (
+      <div role="status" className="flex flex-col items-start gap-3 rounded-xl border border-border bg-card p-4">
+        <p className="flex items-center gap-2 font-medium text-foreground">
+          <CheckCircle2 className="size-5 text-primary" />
+          {queuedCount === 1 ? "1 vídeo na fila de importação" : `${queuedCount} vídeos na fila de importação`}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          As receitas são importadas uma a uma no servidor, então você pode sair desta página. Acompanhe o progresso
+          pelo aviso no canto da tela; cada receita fica em “Para revisar” até você conferi-la.
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setQueuedCount(null);
+            setPlaylist(null);
+            setUrl("");
+          }}
+        >
+          Importar outro link
+        </Button>
+      </div>
+    );
+  }
+
+  const busy = loading || loadingPlaylist;
+
   return (
     <form onSubmit={handleImport} className="flex flex-col gap-3">
-      <Label htmlFor="import-url">Link da receita ou do YouTube</Label>
+      <Label htmlFor="import-url">Link da receita, de um vídeo ou de uma playlist do YouTube</Label>
       <div className="flex flex-col gap-2 sm:flex-row">
         <Input
           id="import-url"
@@ -68,19 +126,36 @@ export function ImportBox({ onImported }: { onImported: (draft: RecipeDraft) => 
           required
           placeholder="https://exemplo.com/receita ou um link do YouTube"
           value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          disabled={loading}
+          onChange={(e) => {
+            setUrl(e.target.value);
+            setPlaylist(null);
+          }}
+          disabled={busy}
         />
-        <Button type="submit" disabled={loading} className="sm:w-40">
+        <Button type="submit" disabled={busy} className="sm:w-40">
           {loading ? (
             <>
               <Loader2 className="size-4 animate-spin" /> {elapsedSeconds}s
             </>
+          ) : loadingPlaylist && isPlaylistPage ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : isPlaylistPage ? (
+            "Ver vídeos"
           ) : (
             "Importar"
           )}
         </Button>
       </div>
+      {inPlaylist && !isPlaylistPage && !playlist && (
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <ListVideo className="size-4" />
+          Este vídeo faz parte de uma playlist.
+          <Button type="button" variant="link" size="sm" className="h-auto p-0" disabled={busy} onClick={loadPlaylist}>
+            {loadingPlaylist && <Loader2 className="size-3.5 animate-spin" />}
+            Escolher vídeos da playlist
+          </Button>
+        </div>
+      )}
       {/* Only used when the page has no structured recipe data and the AI has to read it */}
       <div className="flex flex-col gap-1.5">
         <span id="import-tier-label" className="text-xs text-muted-foreground">
@@ -95,7 +170,7 @@ export function ImportBox({ onImported }: { onImported: (draft: RecipeDraft) => 
               aria-checked={tier === t}
               size="sm"
               variant={tier === t ? "default" : "outline"}
-              disabled={loading}
+              disabled={busy}
               onClick={() => setTier(t)}
             >
               {LLM_TIER_LABELS[t].label}
@@ -117,6 +192,14 @@ export function ImportBox({ onImported }: { onImported: (draft: RecipeDraft) => 
         </div>
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}
+      {playlist && (
+        <PlaylistPicker
+          playlist={playlist}
+          tier={tier}
+          onCancel={() => setPlaylist(null)}
+          onQueued={(count) => setQueuedCount(count)}
+        />
+      )}
     </form>
   );
 }

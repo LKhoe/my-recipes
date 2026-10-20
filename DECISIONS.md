@@ -1116,3 +1116,78 @@ Multi-part recipes lost their structure on import: a risotto with "CALDO: 1 cebo
 - **Header for visitors:** only the "Receitas" link and an "Entrar" button that returns to the
   current page after login; no mobile tab bar (it would hold a single tab). The login screen has a
   "Ver as receitas sem entrar" link back.
+
+## 2026-10-19 — Import rules, "ou" ingredients, review, playlist import
+
+- **The import's clean-up rules live in code as well as in the prompt** (`lib/import-cleanup.ts`,
+  run by `finalizeDraft` on every draft: JSON-LD, LLM and YouTube). The JSON-LD path has no model,
+  and the free tier's small models don't always follow the prompt. Titles lose "Receita de",
+  "Receita fácil de", "Como fazer", "- Receita"; ingredient names lose a leading "de/da/do"; brand
+  products become the generic one ("Leite Moça" -> "leite condensado", "Maizena" -> "amido de
+  milho") and brands that qualify a product are dropped ("creme de leite Nestlé"), in names, notes
+  and steps. The brand list only holds names that are never ordinary words ("Vigor", "Sol",
+  "Garoto" stay out, or "mexa com vigor" would break), so it's partial by design; the prompt covers
+  the rest on the LLM paths.
+- **System prompt rewritten**: grouped by field (general, title, description, ingredients, steps,
+  numbers), with pt-BR examples, the brand and "de" rules, a one- or two-sentence description
+  without promotion, one step per action in the imperative, and a two-entry JSON example. Still in
+  English, still one call.
+- **Photos for webpage imports**: the page's share image (`og:image`, `twitter:image`,
+  `link rel=image_src`) is the fallback when the JSON-LD has none, and the LLM path now gets it too
+  (it had no photo at all). JSON-LD image URLs are resolved against the page. Downloads send a
+  User-Agent and Referer and sniff the real type from the bytes (servers often send
+  `application/octet-stream` or `image/jpg`). The form shows the photo before saving, marked "da
+  importação", and it can be removed; it now goes first (cover) even when the user adds photos.
+- **JSON-LD text is entity-decoded** (`decodeHtmlText`): some sites encode twice
+  ("cl&amp;aacute;ssica"). Found on tudogostoso.com.br, together with two parser gaps now fixed:
+  "2 e 1/2 xícaras" (pt-BR mixed number) and "xícara (chá)" (the standard cup, not a note).
+- **"Ou" ingredients are a flag on the row, not a table** (`recipe_ingredient.is_alternative`): a
+  flagged row is an option for the nearest row above it that isn't one, within the same section —
+  same flat-list approach as sections. Each option keeps its own amount ("1 xíc leite ou 200 ml
+  água"); a shared amount is said once ("100 g manteiga ou margarina"). Shopping lists skip
+  options (you buy one); Alexa reads them with the ingredient's name. On import, "manteiga ou
+  margarina" in a name or "(ou água)" as a note becomes an option, and the LLM returns
+  `alternatives` per ingredient. Editor: a split icon on each ingredient adds an "ou" row below it.
+- **Pending review**: `recipe.review_pending`, set on every recipe saved from an import (unless
+  saved with "Salvar e marcar como revisada") and on every playlist import. Only the author can
+  clear it (`POST /api/recipes/[id]/review`, or `markReviewed` on PATCH, both checked against
+  `authorId`); other members can still edit, as before, without clearing it. The notice shows to
+  everyone, visitors included, since it says the recipe may hold import mistakes. "Para revisar"
+  (`/review`, with a count badge in the nav) lists the user's own pending recipes only, since
+  they're the only ones they can sign off.
+- **Playlist import: a queue in Postgres, worked by a loop in the app process — not Redis/BullMQ.**
+  An import takes 10-60 s (minutes on the free tier's fallback model) and a playlist can have
+  dozens of videos, so it can't run in the request or in the browser: the user has to be able to
+  leave. A queue is needed; the question was which. A table (`import_batch`, `import_batch_item`)
+  won over LocalInfra's Redis + BullMQ because: (1) the popup needs per-user progress, outcome and
+  the created recipe, which has to be in Postgres anyway; with BullMQ it would live twice and
+  drift; (2) imports run one at a time (the gateway limits paid calls, and the free fallback is a
+  single local model), so BullMQ's concurrency, retries and scheduling would go unused; (3) it
+  keeps SPEC §8's "no Redis" and the existing `provision-app.sh --no-redis` setup, with no new
+  service to run, back up or watch; (4) SPEC §4.6 already named an `import_jobs` table as the
+  escape hatch. The loop starts with the server (`instrumentation.ts`), is woken when a batch is
+  queued or retried, claims one item with `FOR UPDATE SKIP LOCKED` (as a scalar `= (subquery)`:
+  an `IN (subquery)` was re-run per row and claimed several items at once, caught by the test),
+  and on start puts items left `running` by a restart back to `pending`. Verified by stopping the
+  dev server mid-import: the queue finished after restart. If imports ever need several workers
+  or another process, BullMQ on LocalInfra's Redis is the next step.
+- **Playlist details**: videos come from the Data API (`playlistItems`, 50 per page, up to 200),
+  so playlist import needs `YOUTUBE_API_KEY`. Deleted/private videos are skipped; videos that are
+  already a recipe (any member's, by video id) or already queued start unchecked. Mixes (`RD…`)
+  and private lists (`WL`, `LL`) aren't treated as playlists. A video link inside a playlist
+  (`watch?v=…&list=…`) imports that video, with a link to pick from the playlist instead. The
+  interactive per-user limit (10 imports/hour) doesn't apply to the queue, which is sequential;
+  when the gateway's limit is reached (`LLMLimitError`), the rest of the batch is marked failed
+  instead of hammering it, and "Tentar de novo" queues failed and cancelled videos again. A video
+  with no recipe is reported ("Sem receita no vídeo") rather than saved as an empty recipe.
+- **Progress popup** (`ImportProgress`, logged-in layout): a card in the bottom-right corner from
+  `sm` up (collapsible, remembered per browser), a pill above the tab bar on phones that opens a
+  bottom sheet. It polls every 4 s only while something is importing, refetches on focus and when
+  a batch is queued, and refreshes the server components when a recipe is created (nav badge,
+  lists). Bottom-left was tried to keep clear of toasts, but there it covered the form's save
+  buttons. "Fechar" hides a finished batch; "Cancelar os que faltam" drops what hasn't started.
+- **Paste a photo**: Ctrl/⌘+V anywhere on the recipe form adds a copied image; in a text field it
+  only takes the image when the clipboard has no text. A "Colar" tile uses
+  `navigator.clipboard.read()` where it exists (it asks for permission, and is how phones paste).
+- **Header**: five links didn't fit between `sm` and `lg` (it already overflowed at 700px with
+  four), so that range shows the short labels and the avatar without the user's name.

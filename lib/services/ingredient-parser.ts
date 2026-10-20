@@ -70,6 +70,13 @@ const UNIT_ALIASES: Record<string, string> = {
   xicara: "xíc",
   "xícaras": "xíc",
   xicaras: "xíc",
+  // "xícara (chá)" is the standard 240 ml cup, not a separate unit.
+  "xícara (chá)": "xíc",
+  "xícaras (chá)": "xíc",
+  "xícara de chá": "xíc",
+  "xícaras de chá": "xíc",
+  "xicara (cha)": "xíc",
+  "xicaras (cha)": "xíc",
   cup: "xíc",
   cups: "xíc",
   csp: "csp",
@@ -195,8 +202,8 @@ export type ParsedIngredientLine = {
 };
 
 function parseLeadingNumber(text: string): { value: number; rest: string } | null {
-  // "2 1/2" or "1/2" or "2.5" or "2" or a unicode fraction, optionally followed by one.
-  const mixedFraction = text.match(/^(\d+)\s+(\d+)\/(\d+)\s*/);
+  // "2 1/2", "2 e 1/2" or "1/2" or "2.5" or "2" or a unicode fraction, optionally followed by one.
+  const mixedFraction = text.match(/^(\d+)\s+(?:e\s+)?(\d+)\/(\d+)\s*/);
   if (mixedFraction) {
     const whole = Number(mixedFraction[1]);
     const num = Number(mixedFraction[2]);
@@ -211,10 +218,10 @@ function parseLeadingNumber(text: string): { value: number; rest: string } | nul
     return { value: num / den, rest: text.slice(simpleFraction[0].length) };
   }
 
-  // A range like "2-3 maçãs", "2 a 3 maçãs", or "2 to 3 apples" — use the lower bound. Checked
+  // A range like "2-3 maçãs", "2 a 3 maçãs", "2 ou 3 ovos" or "2 to 3 apples" — use the lower bound. Checked
   // before the plain-decimal case below since that would otherwise match just the "2" and leave
   // a dangling "-3" stuck to the front of the name.
-  const range = text.match(/^(\d+(?:\.\d+)?)\s*(?:-|a|to)\s*\d+(?:\.\d+)?\s*/);
+  const range = text.match(/^(\d+(?:\.\d+)?)\s*(?:-|a|ou|to|or)\s*\d+(?:\.\d+)?\s*/);
   if (range) {
     return { value: Number(range[1]), rest: text.slice(range[0].length) };
   }
@@ -272,7 +279,8 @@ function splitNameAndNote(text: string): { name: string; note: string | null } {
     note = note ? `${afterComma}; ${note}` : afterComma;
   }
 
-  return { name: working.trim(), note };
+  // The "de" of "2 xícaras de farinha" / "1 lata (400 g) de tomate" belongs to neither the unit nor the name.
+  return { name: working.trim().replace(/^(?:(?:de|da|do|das|dos|of)\s+)+/i, ""), note };
 }
 
 export function parseIngredientLine(raw: string): ParsedIngredientLine {

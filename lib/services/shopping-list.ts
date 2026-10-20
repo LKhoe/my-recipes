@@ -33,7 +33,8 @@ export async function generateShoppingList(userId: string, recipeIds: string[]):
           })
           .from(recipeIngredient)
           .innerJoin(ingredient, eq(recipeIngredient.ingredientId, ingredient.id))
-          .where(inArray(recipeIngredient.recipeId, recipeIds));
+          // An "or" option isn't bought on top of the ingredient it replaces.
+          .where(and(inArray(recipeIngredient.recipeId, recipeIds), eq(recipeIngredient.isAlternative, false)));
 
   const merged = mergeIngredientsForShoppingList(
     ingredientRows.map((r) => ({

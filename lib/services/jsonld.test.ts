@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import path from "path";
 import { describe, expect, it } from "vitest";
-import { extractRecipeFromJsonLd } from "./jsonld";
+import { decodeHtmlText, extractRecipeFromJsonLd } from "./jsonld";
 
 function loadFixture(name: string): string {
   return readFileSync(path.join(process.cwd(), "fixtures", "import", name), "utf-8");
@@ -84,5 +84,34 @@ describe("extractRecipeFromJsonLd", () => {
   it("returns null when there is no JSON-LD Recipe node", () => {
     const html = loadFixture("no-jsonld.html");
     expect(extractRecipeFromJsonLd(html, "https://example.com/pancakes")).toBeNull();
+  });
+});
+
+describe("decodeHtmlText", () => {
+  it("decodes named and numeric entities, even when encoded twice", () => {
+    expect(decodeHtmlText("cl&amp;aacute;ssica receita do cora&amp;ccedil;&amp;atilde;o")).toBe("clássica receita do coração");
+    expect(decodeHtmlText("&#233;pico &#xE7; 180&deg;C")).toBe("épico ç 180°C");
+    expect(decodeHtmlText("para&amp;nbsp;degustar")).toBe("para degustar");
+  });
+
+  it("leaves unknown entities and drops tags", () => {
+    expect(decodeHtmlText("a &foo; b")).toBe("a &foo; b");
+    expect(decodeHtmlText("<p>Bolo <b>fofo</b></p>")).toBe("Bolo fofo");
+  });
+});
+
+describe("extractRecipeFromJsonLd entities", () => {
+  it("decodes entities in every text field", () => {
+    const html = `<script type="application/ld+json">${JSON.stringify({
+      "@type": "Recipe",
+      name: "P&amp;atilde;o de queijo",
+      description: "Cl&amp;aacute;ssico",
+      recipeIngredient: ["2 x&iacute;caras de polvilho"],
+      recipeInstructions: [{ "@type": "HowToStep", text: "Misture o a&amp;ccedil;&amp;uacute;car." }],
+    })}</script>`;
+    const draft = extractRecipeFromJsonLd(html, "https://example.com");
+    expect(draft).toMatchObject({ title: "Pão de queijo", description: "Clássico" });
+    expect(draft!.ingredients[0]).toMatchObject({ ingredientName: "polvilho", unit: "xíc", quantity: 2 });
+    expect(draft!.steps[0].text).toBe("Misture o açúcar.");
   });
 });

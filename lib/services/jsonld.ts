@@ -5,6 +5,35 @@ import type { RecipeDraft, RecipeStep } from "@/types";
 
 type JsonLdNode = Record<string, unknown>;
 
+// Named entities that show up in Portuguese recipe text; numeric ones are decoded generically.
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&", quot: '"', apos: "'", lt: "<", gt: ">", nbsp: " ", deg: "°", ordm: "º", ordf: "ª",
+  frac12: "½", frac14: "¼", frac34: "¾", ndash: "–", mdash: "—", hellip: "…", middot: "·", times: "×",
+  lsquo: "‘", rsquo: "’", ldquo: "“", rdquo: "”", laquo: "«", raquo: "»",
+  aacute: "á", eacute: "é", iacute: "í", oacute: "ó", uacute: "ú", Aacute: "Á", Eacute: "É", Iacute: "Í",
+  Oacute: "Ó", Uacute: "Ú", atilde: "ã", otilde: "õ", Atilde: "Ã", Otilde: "Õ", acirc: "â", ecirc: "ê",
+  ocirc: "ô", Acirc: "Â", Ecirc: "Ê", Ocirc: "Ô", agrave: "à", Agrave: "À", ccedil: "ç", Ccedil: "Ç",
+  uuml: "ü", Uuml: "Ü", ntilde: "ñ", Ntilde: "Ñ",
+};
+
+/**
+ * JSON-LD text sometimes carries HTML entities, and some sites encode them twice
+ * ("cl&amp;aacute;ssica" -> "clássica"); also drops tags some sites leave in descriptions.
+ */
+export function decodeHtmlText(text: string): string {
+  let result = text;
+  for (let pass = 0; pass < 3 && /&#?\w+;/.test(result); pass++) {
+    result = result.replace(/&(#x[\da-f]+|#\d+|\w+);/gi, (match, entity: string) => {
+      if (entity[0] === "#") {
+        const code = entity[1].toLowerCase() === "x" ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10);
+        return Number.isFinite(code) && code > 0 ? String.fromCodePoint(code) : match;
+      }
+      return NAMED_ENTITIES[entity] ?? match;
+    });
+  }
+  return result.replace(/<[^>]+>/g, " ").replace(/[ \t]{2,}/g, " ").trim();
+}
+
 function hasRecipeType(node: JsonLdNode): boolean {
   const type = node["@type"];
   if (typeof type === "string") return type === "Recipe";
@@ -49,6 +78,11 @@ export function extractJsonLdRecipeNodes(html: string): JsonLdNode[] {
   return nodes;
 }
 
+function firstText(value: unknown): string | null {
+  const text = firstString(value);
+  return text === null ? null : decodeHtmlText(text);
+}
+
 function firstString(value: unknown): string | null {
   if (typeof value === "string") return value;
   if (Array.isArray(value) && value.length > 0) return firstString(value[0]);
@@ -74,7 +108,7 @@ function flattenInstructions(instructions: unknown): RecipeStep[] {
   function visit(node: unknown) {
     if (typeof node === "string") {
       // A single blob sometimes arrives as newline-separated sentences.
-      const lines = node.split(/\r?\n+/).map((l) => l.trim()).filter(Boolean);
+      const lines = decodeHtmlText(node).split(/\r?\n+/).map((l) => l.trim()).filter(Boolean);
       for (const line of lines) steps.push({ text: line });
       return;
     }
@@ -90,11 +124,11 @@ function flattenInstructions(instructions: unknown): RecipeStep[] {
         return;
       }
       if (typeof obj.text === "string") {
-        steps.push({ text: obj.text.trim() });
+        steps.push({ text: decodeHtmlText(obj.text) });
         return;
       }
       if (typeof obj.name === "string") {
-        steps.push({ text: obj.name.trim() });
+        steps.push({ text: decodeHtmlText(obj.name) });
       }
     }
   }
@@ -104,11 +138,11 @@ function flattenInstructions(instructions: unknown): RecipeStep[] {
 }
 
 export function jsonLdNodeToDraft(node: JsonLdNode, sourceUrl: string): RecipeDraft | null {
-  const title = firstString(node.name);
+  const title = firstText(node.name);
   if (!title) return null;
 
   const rawIngredients = Array.isArray(node.recipeIngredient)
-    ? (node.recipeIngredient as unknown[]).filter((i): i is string => typeof i === "string")
+    ? (node.recipeIngredient as unknown[]).filter((i): i is string => typeof i === "string").map(decodeHtmlText)
     : [];
   const steps = flattenInstructions(node.recipeInstructions);
 
@@ -140,7 +174,7 @@ export function jsonLdNodeToDraft(node: JsonLdNode, sourceUrl: string): RecipeDr
   return {
     recipeFound: true,
     title,
-    description: firstString(node.description),
+    description: firstText(node.description),
     servings: parseServings(node.recipeYield),
     prepTime: parseIso8601DurationToMinutes(firstString(node.prepTime)),
     cookTime: parseIso8601DurationToMinutes(firstString(node.cookTime)),

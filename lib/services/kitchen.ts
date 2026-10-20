@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { kitchenState, recipe, SINGLETON_KITCHEN_STATE_ID } from "@/lib/db/schema";
+import { groupAlternatives } from "@/lib/ingredient-alternatives";
 import { getRecipeById } from "@/lib/services/recipe";
 import { formatScaledQuantity, scaleQuantity } from "@/lib/scale";
 
@@ -127,16 +128,19 @@ export async function getActiveRecipeForAlexa(): Promise<AlexaActiveRecipe | nul
     currentStepIndex: state.currentStepIndex,
     totalSteps: recipeDetail.steps.length,
     currentStepText: recipeDetail.steps[state.currentStepIndex]?.text ?? "",
-    ingredients: recipeDetail.ingredients.map((i) => ({
-      ingredientName: i.ingredientName,
-      quantity: formatScaledQuantity(
-        i.quantity !== null && recipeDetail.servings && effectiveServings
-          ? scaleQuantity(i.quantity, recipeDetail.servings, effectiveServings)
-          : i.quantity,
-        i.unit,
-      ),
-      unit: i.unit,
-    })),
+    // An "or" option is read out with the ingredient it replaces ("manteiga ou margarina").
+    ingredients: groupAlternatives(recipeDetail.ingredients.map((item, index) => ({ item, index }))).map(
+      ({ primary: { item: i }, alternatives }) => ({
+        ingredientName: [i.ingredientName, ...alternatives.map((a) => a.item.ingredientName)].join(" ou "),
+        quantity: formatScaledQuantity(
+          i.quantity !== null && recipeDetail.servings && effectiveServings
+            ? scaleQuantity(i.quantity, recipeDetail.servings, effectiveServings)
+            : i.quantity,
+          i.unit,
+        ),
+        unit: i.unit,
+      }),
+    ),
   };
 }
 

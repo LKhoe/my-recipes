@@ -9,6 +9,8 @@ export type RecipeIngredientInput = {
   note: string | null;
   /** Section heading ("Massa", "Recheio"); null/absent = no heading. See lib/ingredient-groups.ts. */
   group?: string | null;
+  /** An "or" option for the nearest row above that isn't one. See lib/ingredient-alternatives.ts. */
+  alternative?: boolean;
   /** Draft-only (SPEC §4.6/4.6b): true when a quantity was estimated rather than read verbatim. */
   inferred?: boolean;
 };
@@ -49,6 +51,7 @@ export type RecipeListItem = {
   authorName: string | null;
   imagePath: string | null;
   categories: string[];
+  reviewPending: boolean;
   createdAt: string;
 };
 
@@ -57,6 +60,7 @@ export type RecipeDetail = RecipeInput & {
   authorId: string;
   authorName: string | null;
   images: { id: string; path: string; order: number }[];
+  reviewPending: boolean;
   createdAt: string;
   updatedAt: string;
 };

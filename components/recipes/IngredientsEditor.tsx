@@ -3,8 +3,10 @@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { X, Plus, Sparkles, ListPlus } from "lucide-react";
+import { X, Plus, Sparkles, ListPlus, Split } from "lucide-react";
+import { groupAlternatives } from "@/lib/ingredient-alternatives";
 import { groupIngredientSections } from "@/lib/ingredient-groups";
+import { cn } from "@/lib/utils";
 import type { RecipeIngredientInput } from "@/types";
 
 function emptyRow(group: string | null): RecipeIngredientInput {
@@ -15,13 +17,26 @@ function IngredientRow({
   row,
   onChange,
   onRemove,
+  onAddAlternative,
 }: {
   row: RecipeIngredientInput;
   onChange: (patch: Partial<RecipeIngredientInput>) => void;
   onRemove: () => void;
+  /** Only on a main ingredient: adds an "ou" option below it. */
+  onAddAlternative?: () => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 p-2">
+    <div
+      className={cn(
+        "flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 p-2",
+        row.alternative && "ml-6 border-dashed bg-transparent",
+      )}
+    >
+      {row.alternative && (
+        <span className="w-6 text-center text-xs font-medium uppercase text-muted-foreground" aria-label="ou">
+          ou
+        </span>
+      )}
       <Input
         className="w-20"
         placeholder="Qtd"
@@ -40,7 +55,7 @@ function IngredientRow({
       />
       <Input
         className="min-w-40 flex-1"
-        placeholder="Ingrediente"
+        placeholder={row.alternative ? "Alternativa" : "Ingrediente"}
         required
         value={row.ingredientName}
         onChange={(e) => onChange({ ingredientName: e.target.value })}
@@ -59,7 +74,25 @@ function IngredientRow({
           <Sparkles className="size-3" /> estimado
         </span>
       )}
-      <Button type="button" variant="ghost" size="icon-sm" aria-label="Remover ingrediente" onClick={onRemove}>
+      {onAddAlternative && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Adicionar alternativa (ou…)"
+          title="Adicionar alternativa (ex.: manteiga ou margarina)"
+          onClick={onAddAlternative}
+        >
+          <Split className="size-4" />
+        </Button>
+      )}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        aria-label={row.alternative ? "Remover alternativa" : "Remover ingrediente"}
+        onClick={onRemove}
+      >
         <X className="size-4" />
       </Button>
     </div>
@@ -89,7 +122,43 @@ export function IngredientsEditor({
   }
 
   function removeRow(index: number) {
-    onChange(value.filter((_, i) => i !== index));
+    // Removing a main ingredient promotes its first "ou" option to take its place.
+    const promoteNext = !value[index].alternative && value[index + 1]?.alternative;
+    onChange(
+      value
+        .map((row, i) => (promoteNext && i === index + 1 ? { ...row, alternative: false } : row))
+        .filter((_, i) => i !== index),
+    );
+  }
+
+  /** A new option after the ingredient's last one, starting with the same amount. */
+  function insertAlternative(at: number, primary: RecipeIngredientInput) {
+    const row = { ...emptyRow(primary.group ?? null), quantity: primary.quantity, unit: primary.unit, alternative: true };
+    onChange([...value.slice(0, at), row, ...value.slice(at)]);
+  }
+
+  function renderRows(rows: { item: RecipeIngredientInput; index: number }[]) {
+    return groupAlternatives(rows).map(({ primary, alternatives }) => {
+      const afterLast = (alternatives.at(-1) ?? primary).index + 1;
+      return (
+        <div key={primary.index} className="flex flex-col gap-2">
+          <IngredientRow
+            row={{ ...primary.item, alternative: false }}
+            onChange={(patch) => updateRow(primary.index, patch)}
+            onRemove={() => removeRow(primary.index)}
+            onAddAlternative={() => insertAlternative(afterLast, primary.item)}
+          />
+          {alternatives.map(({ item, index }) => (
+            <IngredientRow
+              key={index}
+              row={item}
+              onChange={(patch) => updateRow(index, patch)}
+              onRemove={() => removeRow(index)}
+            />
+          ))}
+        </div>
+      );
+    });
   }
 
   function insertRow(at: number, group: string | null) {
@@ -111,14 +180,7 @@ export function IngredientsEditor({
           const endIndex = indexes[indexes.length - 1] + 1;
 
           if (section.group === null) {
-            return section.rows.map(({ item, index }) => (
-              <IngredientRow
-                key={index}
-                row={item}
-                onChange={(patch) => updateRow(index, patch)}
-                onRemove={() => removeRow(index)}
-              />
-            ));
+            return <div key={`rows-${indexes[0]}`} className="contents">{renderRows(section.rows)}</div>;
           }
 
           // Removing a heading keeps its ingredients: they join the section above (or none).
@@ -149,14 +211,7 @@ export function IngredientsEditor({
                   <X className="size-4" /> Remover seção
                 </Button>
               </div>
-              {section.rows.map(({ item, index }) => (
-                <IngredientRow
-                  key={index}
-                  row={item}
-                  onChange={(patch) => updateRow(index, patch)}
-                  onRemove={() => removeRow(index)}
-                />
-              ))}
+              {renderRows(section.rows)}
               <Button
                 type="button"
                 variant="ghost"

@@ -13,6 +13,7 @@ import {
   user,
 } from "@/lib/db/schema";
 import { findOrCreateIngredient } from "@/lib/services/ingredient";
+import { cleanAlternativeFlags } from "@/lib/ingredient-alternatives";
 import { normalizeGroupLabel } from "@/lib/ingredient-groups";
 import { normalizeUnit } from "@/lib/services/ingredient-parser";
 import { findOrCreateTag } from "@/lib/services/tag";
@@ -35,7 +36,10 @@ async function replaceRecipeAssociations(
   await tx.delete(recipeCategory).where(eq(recipeCategory.recipeId, recipeId));
   await tx.delete(recipeTag).where(eq(recipeTag.recipeId, recipeId));
 
-  for (const [index, item] of input.ingredients.entries()) {
+  const ingredients = cleanAlternativeFlags(
+    input.ingredients.map((item) => ({ ...item, group: normalizeGroupLabel(item.group) })),
+  );
+  for (const [index, item] of ingredients.entries()) {
     const canonical = await findOrCreateIngredient(item.ingredientName);
     await tx.insert(recipeIngredient).values({
       recipeId,
@@ -45,7 +49,8 @@ async function replaceRecipeAssociations(
       // data arrives by — manual form free-text, LLM extraction, or JSON-LD import.
       unit: normalizeUnit(item.unit),
       note: item.note,
-      group: normalizeGroupLabel(item.group),
+      group: item.group,
+      isAlternative: item.alternative ?? false,
       order: index,
     });
   }
@@ -60,7 +65,11 @@ async function replaceRecipeAssociations(
   }
 }
 
-export async function createRecipe(authorId: string, input: RecipeInput): Promise<{ id: string }> {
+export async function createRecipe(
+  authorId: string,
+  input: RecipeInput,
+  opts: { reviewPending?: boolean } = {},
+): Promise<{ id: string }> {
   return db.transaction(async (tx) => {
     const [created] = await tx
       .insert(recipe)
@@ -74,6 +83,7 @@ export async function createRecipe(authorId: string, input: RecipeInput): Promis
         steps: input.steps,
         sourceUrl: input.sourceUrl,
         videoUrl: input.videoUrl,
+        reviewPending: opts.reviewPending ?? false,
       })
       .returning({ id: recipe.id });
 
@@ -83,7 +93,12 @@ export async function createRecipe(authorId: string, input: RecipeInput): Promis
   });
 }
 
-export async function updateRecipe(recipeId: string, input: RecipeInput): Promise<void> {
+/** `markReviewed` clears the pending-review flag; callers only pass it for the recipe's author. */
+export async function updateRecipe(
+  recipeId: string,
+  input: RecipeInput,
+  opts: { markReviewed?: boolean } = {},
+): Promise<void> {
   await db.transaction(async (tx) => {
     await tx
       .update(recipe)
@@ -96,6 +111,7 @@ export async function updateRecipe(recipeId: string, input: RecipeInput): Promis
         steps: input.steps,
         sourceUrl: input.sourceUrl,
         videoUrl: input.videoUrl,
+        ...(opts.markReviewed ? { reviewPending: false } : {}),
         updatedAt: new Date(),
       })
       .where(eq(recipe.id, recipeId));
@@ -113,12 +129,32 @@ export async function softDeleteRecipe(recipeId: string, userId: string): Promis
   return result.length > 0;
 }
 
+/** Only the author can sign off on an imported recipe. */
+export async function markRecipeReviewed(recipeId: string, userId: string): Promise<boolean> {
+  const result = await db
+    .update(recipe)
+    .set({ reviewPending: false })
+    .where(and(eq(recipe.id, recipeId), eq(recipe.authorId, userId), isNull(recipe.deletedAt)))
+    .returning({ id: recipe.id });
+  return result.length > 0;
+}
+
+export async function countPendingReview(userId: string): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(recipe)
+    .where(and(eq(recipe.authorId, userId), eq(recipe.reviewPending, true), isNull(recipe.deletedAt)));
+  return row?.count ?? 0;
+}
+
 export type RecipeListFilters = {
   /** Plain-text query, ILIKE'd against title/description/ingredient names (SPEC §4.2). */
   q?: string;
   categoryId?: string;
   tag?: string;
   ingredient?: string;
+  /** Only this user's recipes still waiting for review. */
+  pendingReviewFor?: string;
 };
 
 export async function listRecipes(filters: RecipeListFilters = {}): Promise<RecipeListItem[]> {
@@ -139,6 +175,10 @@ export async function listRecipes(filters: RecipeListFilters = {}): Promise<Reci
         ),
       )!,
     );
+  }
+
+  if (filters.pendingReviewFor) {
+    conditions.push(eq(recipe.authorId, filters.pendingReviewFor), eq(recipe.reviewPending, true));
   }
 
   if (filters.categoryId) {
@@ -184,6 +224,7 @@ export async function listRecipes(filters: RecipeListFilters = {}): Promise<Reci
       title: recipe.title,
       description: recipe.description,
       authorName: user.name,
+      reviewPending: recipe.reviewPending,
       createdAt: recipe.createdAt,
     })
     .from(recipe)
@@ -213,6 +254,7 @@ export async function listRecipes(filters: RecipeListFilters = {}): Promise<Reci
       authorName: row.authorName,
       imagePath: image?.path ?? null,
       categories: categoryRows.map((c) => c.name),
+      reviewPending: row.reviewPending,
       createdAt: row.createdAt.toISOString(),
     });
   }
@@ -234,6 +276,7 @@ export async function getRecipeById(recipeId: string): Promise<RecipeDetail | nu
       steps: recipe.steps,
       sourceUrl: recipe.sourceUrl,
       videoUrl: recipe.videoUrl,
+      reviewPending: recipe.reviewPending,
       createdAt: recipe.createdAt,
       updatedAt: recipe.updatedAt,
     })
@@ -257,6 +300,7 @@ export async function getRecipeById(recipeId: string): Promise<RecipeDetail | nu
       unit: recipeIngredient.unit,
       note: recipeIngredient.note,
       group: recipeIngredient.group,
+      alternative: recipeIngredient.isAlternative,
     })
     .from(recipeIngredient)
     .innerJoin(ingredient, eq(recipeIngredient.ingredientId, ingredient.id))
@@ -293,9 +337,11 @@ export async function getRecipeById(recipeId: string): Promise<RecipeDetail | nu
       unit: i.unit,
       note: i.note,
       group: i.group,
+      alternative: i.alternative,
     })),
     categoryIds: categoryRows.map((c) => c.id),
     tags: tagRows.map((t) => t.name),
+    reviewPending: row.reviewPending,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

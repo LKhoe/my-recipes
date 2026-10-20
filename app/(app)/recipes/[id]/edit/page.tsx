@@ -6,7 +6,7 @@ import { RecipeForm, type RecipeFormValues } from "@/components/recipes/RecipeFo
 
 export default async function EditRecipePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await requireSession(`/recipes/${id}/edit`);
+  const session = await requireSession(`/recipes/${id}/edit`);
   const [recipe, categories] = await Promise.all([getRecipeById(id), listCategories()]);
 
   if (!recipe) notFound();
@@ -35,6 +35,8 @@ export default async function EditRecipePage({ params }: { params: Promise<{ id:
           categories={categories}
           initialValues={initialValues}
           initialImages={recipe.images}
+          reviewPending={recipe.reviewPending}
+          canReview={recipe.authorId === session.user.id}
         />
       </div>
     </div>

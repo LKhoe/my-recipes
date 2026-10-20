@@ -37,6 +37,7 @@ export function NewRecipeClient({ categories }: { categories: { id: string; name
         categories={categories}
         initialValues={draftToFormValues(draft)}
         initialRemoteImageUrl={draft.imageUrl}
+        imported
       />
     );
   }

@@ -1,14 +1,17 @@
 import Link from "next/link";
 import { getSession } from "@/lib/session";
+import { countPendingReview } from "@/lib/services/recipe";
 import { UserMenu } from "@/components/auth/UserMenu";
 import { LoginButton } from "@/components/auth/LoginButton";
 import { Logo } from "@/components/Logo";
 import { DesktopNav, MobileTabBar } from "@/components/AppNav";
+import { ImportProgress } from "@/components/import/ImportProgress";
 import { cn } from "@/lib/utils";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
   const isLoggedIn = Boolean(session?.user);
+  const pendingReviewCount = session?.user ? await countPendingReview(session.user.id) : 0;
 
   return (
     <div
@@ -22,7 +25,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Link href="/recipes">
             <Logo />
           </Link>
-          <DesktopNav isLoggedIn={isLoggedIn} />
+          <DesktopNav isLoggedIn={isLoggedIn} pendingReviewCount={pendingReviewCount} />
         </div>
         {session?.user ? (
           <UserMenu
@@ -35,7 +38,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         )}
       </header>
       {children}
-      {isLoggedIn && <MobileTabBar />}
+      {isLoggedIn && <MobileTabBar pendingReviewCount={pendingReviewCount} />}
+      {isLoggedIn && <ImportProgress />}
     </div>
   );
 }

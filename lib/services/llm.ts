@@ -8,6 +8,9 @@ import type { RecipeDraft } from "@/types";
 
 export class LLMExtractionError extends Error {}
 
+/** The gateway's limit on this app's paid calls was reached; retrying right away won't help. */
+export class LLMLimitError extends LLMExtractionError {}
+
 // Cook mode turns a step's durationMinutes into a countdown. Anything longer than this is a wait
 // (overnight rise, days of fermentation), not a timer anyone watches, so it's dropped.
 export const MAX_STEP_DURATION_MINUTES = 180;
@@ -17,12 +20,20 @@ const llmStepSchema = z.object({
   durationMinutes: z.number().nullable().optional(),
 });
 
+const llmAlternativeSchema = z.object({
+  ingredientName: z.string(),
+  quantity: z.number().nullable().optional(),
+  unit: z.string().nullable().optional(),
+  note: z.string().nullable().optional(),
+});
+
 const llmIngredientSchema = z.object({
   ingredientName: z.string(),
   quantity: z.number().nullable().optional(),
   unit: z.string().nullable().optional(),
   note: z.string().nullable().optional(),
   group: z.string().nullable().optional(),
+  alternatives: z.array(llmAlternativeSchema).nullable().optional(),
   inferred: z.boolean().optional(),
 });
 
@@ -39,13 +50,32 @@ const llmRecipeSchema = z.object({
 
 export type ExtractionContext = "webpage" | "youtube";
 
+const UNIT_TOKENS = "g, kg, ml, l, xíc, csp, csb, cch, dente, pitada, fatia, lata, maço, ramo, pacote, tablete, unidade";
+
+// Written in English (models follow instructions in English best), with Brazilian Portuguese
+// examples, since every text field of the answer is in pt-BR. Code repeats the most important
+// rules after the call (title, brands, units, durations: lib/import-cleanup.ts and below), because
+// the free tier's small models don't always follow them.
 function buildSystemPrompt(context: ExtractionContext, allowEstimation: boolean): string {
   const sourceLabel = {
-    webpage: "a recipe webpage's text content",
-    youtube: "a YouTube video's title, description and spoken transcript (either may be missing)",
+    webpage: "the text of a recipe webpage (it may also contain menus, ads, comments and links to other recipes)",
+    youtube: "a YouTube cooking video's title, description and spoken transcript (any of them may be missing)",
   }[context];
 
-  return `You extract a single cooking recipe from ${sourceLabel}. Respond with ONLY a JSON object, no markdown fences, matching exactly this shape:
+  const sourceRules = {
+    webpage:
+      "- Use only the main recipe of the page. Ignore navigation, ads, reader comments, nutrition tables and other recipes linked from the page.",
+    youtube:
+      "- The transcript is usually auto-generated captions: no punctuation, some misheard words, plus greetings, sponsor reads and channel chatter (\"deixe seu like\", \"se inscreva\") to ignore.\n- Where the description lists ingredients or quantities, prefer it over the transcript; take the method from the transcript when the description has none.",
+  }[context];
+
+  const estimationRules = allowEstimation
+    ? `- A vague amount ("uma pitada de sal", "um fio de azeite", "um punhado de salsinha", "um pouco de shoyu", "dois dedos de água") gets your best numeric estimate with a sensible unit (liquids in ml or csp, herbs in maço or csp) and "inferred": true.
+- An ingredient added with no amount at all ("adicione cebola, pimentão e tomate") also gets a typical amount for the recipe (e.g. 1 unidade de cebola) and "inferred": true.
+- Only a truly unquantifiable one ("sal a gosto") keeps quantity/unit null and "inferred": false.`
+    : `- Set "quantity" only when the text states a number. Never estimate: "inferred" is always false.`;
+
+  return `You turn ${sourceLabel} into one structured cooking recipe. Reply with ONLY a JSON object, no markdown fences and no comments, of exactly this shape:
 
 {
   "recipeFound": boolean,
@@ -55,28 +85,53 @@ function buildSystemPrompt(context: ExtractionContext, allowEstimation: boolean)
   "prepTime": number | null,
   "cookTime": number | null,
   "steps": [{ "text": string, "durationMinutes": number | null }],
-  "ingredients": [{ "ingredientName": string, "quantity": number | null, "unit": string | null, "note": string | null, "group": string | null, "inferred": boolean }]
+  "ingredients": [{
+    "ingredientName": string,
+    "quantity": number | null,
+    "unit": string | null,
+    "note": string | null,
+    "group": string | null,
+    "alternatives": [{ "ingredientName": string, "quantity": number | null, "unit": string | null, "note": string | null }],
+    "inferred": boolean
+  }]
 }
 
-Rules:
-- If there is no recipe in the text, set "recipeFound": false and leave the rest empty/null.
-- Write every text field (title, description, step text, ingredient names, notes) in Brazilian Portuguese, translating from the source if it is in another language.
-- "title" is the dish's name in sentence case: capitalize only the first word and proper nouns (e.g. "Coração de boi acebolado", never "CORAÇÃO DE BOI ACEBOLADO" or "Coração De Boi Acebolado"), with no channel name, emojis or hashtags.
-- Split every ingredient line into "ingredientName" (bare noun), "quantity" (a plain decimal number), "unit" (metric or a common Brazilian Portuguese cooking-unit token: g, kg, ml, l, xíc, csp, csb, cch, dente, pitada, fatia, lata, maço, ramo, pacote, tablete, unidade), and "note" (prep detail like "picado", "derretida", "a gosto" — or null; never "inferred" or "estimado", that goes in the "inferred" field). Normalize the unit to one of those tokens even if the source spells it out differently: "colher de sopa" -> "csp", "colher de sobremesa" or "colherinha de sobremesa" -> "csb", "colher de chá" or "colherinha" -> "cch", "xícara" -> "xíc".
-- "quantity" and "unit" come as a pair: both set, or both null. Never return a quantity without a unit or a unit without a quantity. Whole items counted by number (ovos, cebolas, tomates, limões) take the unit "unidade". An ingredient with no amount (one the rule below doesn't have you estimate) gets null for both, with "a gosto" in "note" only when the source says so.
-- "group" names the part of the recipe an ingredient belongs to, when the source splits the ingredients into parts (e.g. "CALDO:", "Para a massa", "Recheio", "Molho"): the part's short name in sentence case ("Caldo", "Massa", "Recheio"), the same on every ingredient of that part, with the ingredients listed in the source's order, part by part. When an ingredient appears in more than one part, list it once per part with that part's own quantity; never add the amounts together (1 cebola in "Caldo" and 1/2 cebola in "Risoto" stay two entries, not "1.5 cebola"). A recipe with a single ingredient list gets null on every ingredient.
-- prepTime/cookTime are total minutes as a number, only if explicitly stated; otherwise null.
-- "durationMinutes" on a step is a number only when that step states a specific duration of active cooking someone would time (e.g. "bake for 25 minutes" -> 25), at most ${MAX_STEP_DURATION_MINUTES}; otherwise null. Long waits (resting overnight, marinating for hours, fermenting for days) get null, with the time kept in the step text.
-- "servings" is a plain integer if stated (e.g. "serves 4-6" -> 4); otherwise null.
-${
-  context === "youtube"
-    ? "- The transcript is usually auto-generated captions: no punctuation, some misheard words, plus greetings and channel chatter to ignore. Where the description lists ingredients or quantities, prefer it over the transcript; take the method from the transcript.\n"
-    : ""
-}${
-  allowEstimation
-    ? '- If a quantity is vague ("uma pitada de sal", "um fio de azeite", "um punhado de salsinha", "um pouco de shoyu", "dois dedos de água"), give your best numeric estimate with a sensible unit from the list (liquids in ml or csp, herbs in maço or csp) and set "inferred": true. The same goes for an ingredient added with no amount at all ("adicione cebola, pimentão e tomate"): estimate a typical amount for the recipe (e.g. 1 unidade de cebola). Only when it is truly unquantifiable ("sal a gosto") leave quantity/unit null and "inferred": false.'
-    : '- Only set "quantity" when a number is explicitly stated in the text. Never estimate. "inferred" is always false.'
-}`;
+General
+- If the text has no recipe (no ingredients and no method), set "recipeFound": false and leave everything else empty or null. Never invent a recipe.
+- Write every text field in Brazilian Portuguese, translating from the source when needed.
+- Never mention brands, anywhere (title, ingredients, notes, steps): use the generic product. "Leite Moça" -> "leite condensado", "Maizena" -> "amido de milho", "creme de leite Nestlé" -> "creme de leite", "Nescau" -> "achocolatado em pó", "Catupiry" -> "requeijão cremoso", "fermento Royal" -> "fermento em pó", "caldo Knorr" -> "caldo de galinha".
+${sourceRules}
+
+Title
+- The dish's name only, in sentence case: capitalize the first word and proper nouns ("Coração de boi acebolado", never "CORAÇÃO DE BOI ACEBOLADO" or "Coração De Boi Acebolado").
+- Never start with "Receita de", "Receita:", "Como fazer" or "Aprenda a fazer", and drop marketing words that aren't part of the dish's name ("o melhor", "perfeito", "incrível", "fácil e rápido"): "RECEITA DE BOLO DE CENOURA FOFINHO (MUITO FÁCIL)" -> "Bolo de cenoura fofinho".
+- No channel name, emojis or hashtags.
+
+Description
+- One or two sentences in your own words about the dish (what it is, its texture, when to serve it), or null when the source says nothing useful. No ingredient list, links, sponsor mentions or calls to subscribe.
+
+Ingredients
+- One entry per ingredient line, in the source's order.
+- "ingredientName" is the bare generic name in lowercase, as a shopper would look for it ("farinha de trigo", "ovo", "cebola", "leite condensado"). It never starts with a preposition: the "de" of "2 xícaras de farinha" belongs to neither the unit nor the name ("farinha", not "de farinha"). It holds no amount, unit, preparation or brand.
+- "unit" is one of these tokens: ${UNIT_TOKENS}. Convert other spellings: "colher de sopa" -> "csp", "colher de sobremesa" -> "csb", "colher de chá" or "colherinha" -> "cch", "xícara" -> "xíc", "gramas" -> "g". Whole items counted by number (ovos, cebolas, tomates, limões) take "unidade".
+- "quantity" is a plain decimal number ("1/2" -> 0.5, "1 e 1/2" -> 1.5; a range "2 a 3" -> 2). "quantity" and "unit" come as a pair: both set or both null, never one without the other.
+- "note" holds preparation or detail ("picada", "derretida", "em temperatura ambiente", "opcional", "a gosto"), or null. Never put "inferred" or "estimado" there.
+- "alternatives" lists substitutes the source offers for that ingredient ("manteiga ou margarina", "leite (ou água)", "100 g de manteiga ou 1/2 xícara de óleo"). The first option is the ingredient itself; the others go in "alternatives", each with its own quantity and unit (repeat the ingredient's amount when the source gives a single amount for both). Use [] when there is no substitute. Not for optional ingredients (that's "opcional" in "note") and not for different ingredients listed together.
+- "group" names the part of the recipe an ingredient belongs to when the source splits the ingredients into parts ("CALDO:", "Para a massa", "Recheio", "Cobertura"): the part's short name in sentence case ("Caldo", "Massa", "Recheio"), the same on every ingredient of that part, part by part in the source's order. An ingredient that appears in more than one part is listed once per part with that part's own amount, never summed (1 cebola in "Caldo" and 1/2 cebola in "Risoto" stay two entries). A recipe with a single ingredient list has null on every ingredient.
+${estimationRules}
+
+Steps
+- The method in the source's order, one step per action or short group of related actions, in the imperative ("Misture a farinha e o açúcar.", "Leve ao forno preaquecido a 180 °C."). Don't cram the whole method into one step or split one sentence into several.
+- Keep temperatures, times and visual cues ("até dourar"); leave out chatter, tips about the channel and serving suggestions that aren't part of the method.
+- "durationMinutes" is a number only when the step states a specific duration of active cooking someone would time ("asse por 25 minutos" -> 25), at most ${MAX_STEP_DURATION_MINUTES}; otherwise null. Long waits (resting overnight, marinating for hours, fermenting for days) get null, with the time kept in the step text.
+
+Numbers
+- "prepTime" and "cookTime" are total minutes, only when the source states them; otherwise null.
+- "servings" is a plain integer when stated ("serve 4 a 6 pessoas" -> 4, "rende 20 brigadeiros" -> 20); otherwise null.
+
+Example of two ingredient entries, from "200 g de manteiga sem sal (ou margarina)" and "Sal a gosto":
+{ "ingredientName": "manteiga sem sal", "quantity": 200, "unit": "g", "note": null, "group": null, "alternatives": [{ "ingredientName": "margarina", "quantity": 200, "unit": "g", "note": null }], "inferred": false }
+{ "ingredientName": "sal", "quantity": null, "unit": null, "note": "a gosto", "group": null, "alternatives": [], "inferred": false }`;
 }
 
 // The model sometimes writes its estimate flag into the note too ("picada, inferred", "(estimado)").
@@ -145,7 +200,7 @@ export async function extractRecipeWithLLM(
 
   // The gateway's per-app limit on paid calls (monthly budget or calls per day)
   if (res.status === 429) {
-    throw new LLMExtractionError(
+    throw new LLMLimitError(
       "o limite de uso da IA foi atingido. Tente de novo mais tarde ou cadastre a receita à mão.",
     );
   }
@@ -201,16 +256,31 @@ export async function extractRecipeWithLLM(
       text: s.text,
       durationMinutes: cleanStepDuration(s.durationMinutes),
     })),
-    ingredients: data.ingredients.map((i) => ({
-      ingredientName: i.ingredientName,
-      quantity: i.quantity ?? null,
-      // A unit with no quantity ("pitada" of nothing) can't be scaled or merged on a shopping list.
-      unit: i.quantity != null ? (i.unit ?? null) : null,
-      note: cleanIngredientNote(i.note),
-      group: normalizeGroupLabel(i.group),
-      // Nothing was estimated when there is no quantity.
-      inferred: i.quantity != null && (i.inferred ?? false),
-    })),
+    ingredients: data.ingredients.flatMap((i) => {
+      const group = normalizeGroupLabel(i.group);
+      const primary = {
+        ingredientName: i.ingredientName,
+        quantity: i.quantity ?? null,
+        // A unit with no quantity ("pitada" of nothing) can't be scaled or merged on a shopping list.
+        unit: i.quantity != null ? (i.unit ?? null) : null,
+        note: cleanIngredientNote(i.note),
+        group,
+        // Nothing was estimated when there is no quantity.
+        inferred: i.quantity != null && (i.inferred ?? false),
+      };
+      const alternatives = (i.alternatives ?? [])
+        .filter((a) => a.ingredientName.trim())
+        .map((a) => ({
+          ingredientName: a.ingredientName,
+          quantity: a.quantity ?? null,
+          unit: a.quantity != null ? (a.unit ?? null) : null,
+          note: cleanIngredientNote(a.note),
+          group,
+          alternative: true,
+          inferred: false,
+        }));
+      return [primary, ...alternatives];
+    }),
     sourceUrl: opts.sourceUrl,
     videoUrl: opts.videoUrl,
     imageUrl: opts.imageUrl ?? null,

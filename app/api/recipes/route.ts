@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { createRecipe, listRecipes } from "@/lib/services/recipe";
-import { recipeInputSchema } from "@/lib/validation";
+import { createRecipeSchema } from "@/lib/validation";
 
 export async function GET(request: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -26,11 +26,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
-  const parsed = recipeInputSchema.safeParse(await request.json().catch(() => null));
+  const parsed = createRecipeSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Dados da receita inválidos." }, { status: 400 });
   }
 
-  const created = await createRecipe(session.user.id, parsed.data);
+  const { reviewPending, ...input } = parsed.data;
+  const created = await createRecipe(session.user.id, input, { reviewPending });
   return NextResponse.json(created, { status: 201 });
 }

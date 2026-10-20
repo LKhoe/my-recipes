@@ -21,6 +21,17 @@ import { randomUUID } from "crypto";
 
 export const mealSlotEnum = pgEnum("meal_slot", ["breakfast", "lunch", "dinner"]);
 
+// A playlist import's video, from queued to its outcome. `no_recipe`: the video has no recipe the
+// model could find; `cancelled`: dropped by the user before it ran.
+export const importItemStatusEnum = pgEnum("import_item_status", [
+  "pending",
+  "running",
+  "done",
+  "no_recipe",
+  "failed",
+  "cancelled",
+]);
+
 // ---------------------------------------------------------------------------
 // Better Auth tables (schema shape dictated by Better Auth's Drizzle adapter)
 // ---------------------------------------------------------------------------
@@ -129,12 +140,16 @@ export const recipe = pgTable(
     steps: jsonb("steps").$type<RecipeStep[]>().notNull().default([]),
     sourceUrl: text("source_url"),
     videoUrl: text("video_url"),
+    // Set on every recipe imported from a site or video, until its author marks it reviewed: the
+    // draft came from a parser or a model and may hold mistakes.
+    reviewPending: boolean("review_pending").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
     deletedAt: timestamp("deleted_at"),
   },
   (table) => [
     index("recipe_author_id_idx").on(table.authorId),
+    index("recipe_review_pending_idx").on(table.authorId, table.reviewPending),
     index("recipe_title_idx").on(table.title),
     index("recipe_deleted_at_idx").on(table.deletedAt),
   ],
@@ -239,6 +254,9 @@ export const recipeIngredient = pgTable(
     // Section heading ("Massa", "Recheio") for multi-part recipes; null = no heading. A section is
     // a run of consecutive rows (by `order`) sharing the same label.
     group: text("group_name"),
+    // An "or" option for the nearest row above it that isn't one ("manteiga" ou "margarina"); see
+    // lib/ingredient-alternatives.ts.
+    isAlternative: boolean("is_alternative").notNull().default(false),
     order: integer("order").notNull().default(0),
   },
   (table) => [
@@ -415,6 +433,55 @@ export const shoppingListItem = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Playlist imports — a Postgres-backed queue (see DECISIONS.md "Playlist import")
+// ---------------------------------------------------------------------------
+
+export const importBatch = pgTable(
+  "import_batch",
+  {
+    id: text("id")
+      .primaryKey()
+      .$default(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    title: text("title"),
+    // LLM tier the user picked (lib/llm-tiers.ts)
+    tier: text("tier").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    // Hidden from the progress popup once the user closes it.
+    dismissedAt: timestamp("dismissed_at"),
+  },
+  (table) => [index("import_batch_user_id_idx").on(table.userId)],
+);
+
+export const importBatchItem = pgTable(
+  "import_batch_item",
+  {
+    id: text("id")
+      .primaryKey()
+      .$default(() => randomUUID()),
+    batchId: text("batch_id")
+      .notNull()
+      .references(() => importBatch.id, { onDelete: "cascade" }),
+    videoId: text("video_id").notNull(),
+    title: text("title").notNull(),
+    thumbnailUrl: text("thumbnail_url"),
+    position: integer("position").notNull(),
+    status: importItemStatusEnum("status").notNull().default("pending"),
+    error: text("error"),
+    recipeId: text("recipe_id").references(() => recipe.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    startedAt: timestamp("started_at"),
+    finishedAt: timestamp("finished_at"),
+  },
+  (table) => [
+    index("import_batch_item_batch_id_idx").on(table.batchId),
+    index("import_batch_item_status_idx").on(table.status),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Kitchen state — circle-wide singleton (SPEC §9.1)
 // ---------------------------------------------------------------------------
 
@@ -538,6 +605,16 @@ export const shoppingListItemRelations = relations(shoppingListItem, ({ one }) =
     fields: [shoppingListItem.ingredientId],
     references: [ingredient.id],
   }),
+}));
+
+export const importBatchRelations = relations(importBatch, ({ one, many }) => ({
+  user: one(user, { fields: [importBatch.userId], references: [user.id] }),
+  items: many(importBatchItem),
+}));
+
+export const importBatchItemRelations = relations(importBatchItem, ({ one }) => ({
+  batch: one(importBatch, { fields: [importBatchItem.batchId], references: [importBatch.id] }),
+  recipe: one(recipe, { fields: [importBatchItem.recipeId], references: [recipe.id] }),
 }));
 
 export const kitchenStateRelations = relations(kitchenState, ({ one }) => ({

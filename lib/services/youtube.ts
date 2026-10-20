@@ -2,6 +2,8 @@ import { Innertube, Log } from "youtubei.js";
 
 export { parseYouTubeVideoId, isYouTubeUrl } from "@/lib/youtube-utils";
 
+export class YouTubePlaylistError extends Error {}
+
 export type YouTubeVideoMetadata = {
   title: string;
   description: string;
@@ -58,6 +60,72 @@ export function pickThumbnailUrl(thumbnails: Thumbnails | undefined): string | n
     if (url) return url;
   }
   return null;
+}
+
+export type PlaylistVideo = { videoId: string; title: string; thumbnailUrl: string | null };
+export type YouTubePlaylist = { playlistId: string; title: string; videos: PlaylistVideo[] };
+
+// Enough for any cooking playlist; the Data API pages 50 at a time (1 quota unit per page).
+export const MAX_PLAYLIST_VIDEOS = 200;
+
+// Deleted and private videos stay in a playlist as placeholders with no thumbnail.
+const UNAVAILABLE_VIDEO_TITLES = new Set(["Deleted video", "Private video", "Vídeo excluído", "Vídeo privado"]);
+
+async function dataApiGet(path: string, params: Record<string, string>) {
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (!apiKey) throw new YouTubePlaylistError("A chave da API do YouTube (YOUTUBE_API_KEY) não está configurada.");
+
+  const url = new URL(`https://www.googleapis.com/youtube/v3/${path}`);
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  url.searchParams.set("key", apiKey);
+
+  let res: Response;
+  try {
+    res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+  } catch (err) {
+    console.warn(`[youtube] ${path}: Data API request failed:`, err);
+    throw new YouTubePlaylistError("Não foi possível falar com o YouTube. Tente de novo.");
+  }
+  if (res.status === 404) throw new YouTubePlaylistError("Playlist não encontrada. Ela é pública?");
+  if (!res.ok) {
+    console.warn(`[youtube] ${path}: Data API request failed (HTTP ${res.status})`);
+    throw new YouTubePlaylistError("O YouTube recusou o pedido da playlist. Tente de novo mais tarde.");
+  }
+  return res.json();
+}
+
+/** A public or unlisted playlist's title and videos, in playlist order, via the Data API. */
+export async function fetchPlaylist(playlistId: string): Promise<YouTubePlaylist> {
+  const meta = await dataApiGet("playlists", { part: "snippet", id: playlistId });
+  const snippet = meta?.items?.[0]?.snippet;
+  if (!snippet) throw new YouTubePlaylistError("Playlist não encontrada. Ela é pública?");
+
+  const videos: PlaylistVideo[] = [];
+  const seen = new Set<string>();
+  let pageToken: string | undefined;
+  do {
+    const page = await dataApiGet("playlistItems", {
+      part: "snippet",
+      playlistId,
+      maxResults: "50",
+      ...(pageToken ? { pageToken } : {}),
+    });
+    for (const item of page?.items ?? []) {
+      const videoId: string | undefined = item?.snippet?.resourceId?.videoId;
+      const title: string = item?.snippet?.title ?? "";
+      if (!videoId || seen.has(videoId) || UNAVAILABLE_VIDEO_TITLES.has(title)) continue;
+      seen.add(videoId);
+      videos.push({ videoId, title, thumbnailUrl: pickListThumbnailUrl(item.snippet.thumbnails) });
+    }
+    pageToken = page?.nextPageToken;
+  } while (pageToken && videos.length < MAX_PLAYLIST_VIDEOS);
+
+  return { playlistId, title: snippet.title ?? "", videos: videos.slice(0, MAX_PLAYLIST_VIDEOS) };
+}
+
+/** A small thumbnail for a list row (320x180 `medium` is true 16:9); falls back to any size. */
+function pickListThumbnailUrl(thumbnails: Thumbnails | undefined): string | null {
+  return thumbnails?.medium?.url ?? pickThumbnailUrl(thumbnails);
 }
 
 let innertubePromise: Promise<Innertube> | null = null;

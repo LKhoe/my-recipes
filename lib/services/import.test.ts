@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("./html-fetch", () => ({
   fetchPageHtml: vi.fn(),
   stripToReadableText: vi.fn((html: string) => `stripped:${html}`),
+  extractMetaImageUrl: vi.fn(() => null),
+  resolveImageUrl: vi.fn((value: string | null) => value),
   PageFetchError: class PageFetchError extends Error {},
 }));
 
@@ -22,7 +24,7 @@ vi.mock("./youtube", () => ({
   fetchTranscriptText: vi.fn(),
 }));
 
-import { fetchPageHtml, stripToReadableText } from "./html-fetch";
+import { extractMetaImageUrl, fetchPageHtml, stripToReadableText } from "./html-fetch";
 import { extractRecipeFromJsonLd } from "./jsonld";
 import { extractRecipeWithLLM, LLMExtractionError } from "./llm";
 import { fetchTranscriptText, fetchVideoMetadata, isYouTubeUrl, parseYouTubeVideoId } from "./youtube";
@@ -56,8 +58,63 @@ describe("importRecipeFromUrl", () => {
 
     const draft = await importRecipeFromUrl("https://example.com/recipe");
 
-    expect(draft).toBe(foundDraft);
+    expect(draft).toEqual(foundDraft);
     expect(extractRecipeWithLLM).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the page's share image when the JSON-LD has no photo", async () => {
+    vi.mocked(fetchPageHtml).mockResolvedValue("<html>jsonld page</html>");
+    vi.mocked(extractMetaImageUrl).mockReturnValue("https://example.com/og.jpg");
+    vi.mocked(extractRecipeFromJsonLd).mockReturnValue(foundDraft);
+
+    const draft = await importRecipeFromUrl("https://example.com/recipe");
+
+    expect(draft.imageUrl).toBe("https://example.com/og.jpg");
+  });
+
+  it("gives the LLM path the page's share image, since the model never returns one", async () => {
+    vi.mocked(fetchPageHtml).mockResolvedValue("<html>no structured data</html>");
+    vi.mocked(extractMetaImageUrl).mockReturnValue("https://example.com/og.jpg");
+    vi.mocked(extractRecipeFromJsonLd).mockReturnValue(null);
+    vi.mocked(extractRecipeWithLLM).mockResolvedValue(foundDraft);
+
+    await importRecipeFromUrl("https://example.com/blog-post");
+
+    expect(extractRecipeWithLLM).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ imageUrl: "https://example.com/og.jpg" }),
+    );
+  });
+
+  it("cleans every draft: title prefix, brands, leading 'de' and 'ou' options", async () => {
+    vi.mocked(fetchPageHtml).mockResolvedValue("<html>jsonld page</html>");
+    vi.mocked(extractRecipeFromJsonLd).mockReturnValue({
+      ...foundDraft,
+      title: "Receita de Pudim de leite",
+      steps: [{ text: "Bata o Leite Moça com os ovos." }],
+      ingredients: [
+        { ingredientName: "de leite Moça", quantity: 1, unit: "lata", note: null },
+        { ingredientName: "manteiga ou margarina", quantity: 1, unit: "csp", note: "para untar" },
+      ],
+    });
+
+    const draft = await importRecipeFromUrl("https://example.com/recipe");
+
+    expect(draft.title).toBe("Pudim de leite");
+    expect(draft.steps[0].text).toBe("Bata o leite condensado com os ovos.");
+    expect(draft.ingredients).toEqual([
+      { ingredientName: "leite condensado", quantity: 1, unit: "lata", note: null },
+      { ingredientName: "manteiga", quantity: 1, unit: "csp", note: "para untar" },
+      {
+        ingredientName: "margarina",
+        quantity: 1,
+        unit: "csp",
+        note: null,
+        group: undefined,
+        alternative: true,
+        inferred: false,
+      },
+    ]);
   });
 
   it("falls back to the LLM over stripped page text when JSON-LD is missing", async () => {
@@ -67,7 +124,7 @@ describe("importRecipeFromUrl", () => {
 
     const draft = await importRecipeFromUrl("https://example.com/blog-post");
 
-    expect(draft).toBe(foundDraft);
+    expect(draft).toEqual(foundDraft);
     expect(stripToReadableText).toHaveBeenCalledWith("<html>no structured data</html>");
     expect(extractRecipeWithLLM).toHaveBeenCalledWith(
       "stripped:<html>no structured data</html>",
