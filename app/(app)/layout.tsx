@@ -22,8 +22,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     >
       <header className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex items-center gap-6">
-          <Link href="/recipes">
-            <Logo />
+          {/* On a tablet the name doesn't fit beside the six links; the bowl alone does. */}
+          <Link href="/recipes" aria-label="Minhas Receitas">
+            <Logo textClassName="sm:max-md:hidden" />
           </Link>
           <DesktopNav isLoggedIn={isLoggedIn} pendingReviewCount={pendingReviewCount} />
         </div>

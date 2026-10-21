@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCountdown, formatIngredientChoice, formatIngredientLine } from "./format";
+import { formatCountdown, formatIngredientChoice, formatIngredientLine, formatTimeAgo } from "./format";
 
 describe("formatIngredientLine", () => {
   it("formats an unscaled ingredient line with unit and note", () => {
@@ -64,5 +64,21 @@ describe("formatIngredientChoice", () => {
 
   it("is the plain line when there are no options", () => {
     expect(formatIngredientChoice(item("sal", null, null, "a gosto"), [])).toBe("sal (a gosto)");
+  });
+});
+
+describe("formatTimeAgo", () => {
+  const now = new Date("2026-10-21T12:00:00Z");
+  const ago = (ms: number) => formatTimeAgo(new Date(now.getTime() - ms), now);
+
+  it("reads seconds, minutes, hours and days in words", () => {
+    expect(ago(20_000)).toBe("agora há pouco");
+    expect(ago(60_000)).toBe("há 1 minuto");
+    expect(ago(45 * 60_000)).toBe("há 45 minutos");
+    expect(ago(3 * 3600_000)).toBe("há 3 horas");
+    expect(ago(30 * 3600_000)).toBe("ontem");
+    expect(ago(5 * 86400_000)).toBe("há 5 dias");
+    expect(ago(65 * 86400_000)).toBe("há 2 meses");
+    expect(ago(400 * 86400_000)).toBe("há mais de um ano");
   });
 });

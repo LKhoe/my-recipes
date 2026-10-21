@@ -141,8 +141,14 @@ async function dataApiGet(path: string, params: Record<string, string>) {
   return res.json();
 }
 
-/** A public or unlisted playlist's title and videos, in playlist order, via the Data API. */
-export async function fetchPlaylist(playlistId: string): Promise<YouTubePlaylist> {
+/**
+ * A public or unlisted playlist's title and videos, in playlist order, via the Data API. Saved
+ * playlists (services/playlist.ts) read further than the import picker's MAX_PLAYLIST_VIDEOS.
+ */
+export async function fetchPlaylist(
+  playlistId: string,
+  { maxVideos = MAX_PLAYLIST_VIDEOS }: { maxVideos?: number } = {},
+): Promise<YouTubePlaylist> {
   const meta = await dataApiGet("playlists", { part: "snippet", id: playlistId });
   const snippet = meta?.items?.[0]?.snippet;
   if (!snippet) throw new YouTubePlaylistError("Playlist não encontrada. Ela é pública?");
@@ -165,9 +171,9 @@ export async function fetchPlaylist(playlistId: string): Promise<YouTubePlaylist
       videos.push({ videoId, title, thumbnailUrl: pickListThumbnailUrl(item.snippet.thumbnails) });
     }
     pageToken = page?.nextPageToken;
-  } while (pageToken && videos.length < MAX_PLAYLIST_VIDEOS);
+  } while (pageToken && videos.length < maxVideos);
 
-  return { playlistId, title: snippet.title ?? "", videos: videos.slice(0, MAX_PLAYLIST_VIDEOS) };
+  return { playlistId, title: snippet.title ?? "", videos: videos.slice(0, maxVideos) };
 }
 
 /** A small thumbnail for a list row (320x180 `medium` is true 16:9); falls back to any size. */

@@ -1186,6 +1186,18 @@ Multi-part recipes lost their structure on import: a risotto with "CALDO: 1 cebo
   a batch is queued, and refreshes the server components when a recipe is created (nav badge,
   lists). Bottom-left was tried to keep clear of toasts, but there it covered the form's save
   buttons. "Fechar" hides a finished batch; "Cancelar os que faltam" drops what hasn't started.
+- **Saved playlists** (`/playlists`, `youtube_playlist` + `youtube_playlist_video`): per user,
+  one row per YouTube playlist, with its videos as last read. Only the videos and the "Ignorar"
+  mark are stored; whether a video is imported, queued or failed is worked out on every read
+  from the recipes (by video id, any member's, like the picker) and the user's latest import of
+  it, so a video imported from "Adicionar receita" shows as imported here too, and a deleted
+  recipe makes its video importable again. "Atualizar" reads the whole playlist again (up to
+  1000 videos, 1 quota unit per 50): new videos are added and marked "Novo" until the next
+  refresh, videos taken out of the playlist are dropped. The manage page lists not imported
+  (queued first, then new ones), imported, failed, ignored, and imports through the same queue.
+  The sixth nav link didn't fit a tablet header, so the logo shows only the bowl from `sm` to `md`.
+  Test files now run one at a time (`fileParallelism: false`): the integration tests share the
+  database, and import-queue.test.ts cancels every queued video between its tests.
 - **Paste a photo**: Ctrl/⌘+V anywhere on the recipe form adds a copied image; in a text field it
   only takes the image when the clipboard has no text. A "Colar" tile uses
   `navigator.clipboard.read()` where it exists (it asks for permission, and is how phones paste).

@@ -503,6 +503,48 @@ export const videoTranscript = pgTable("video_transcript", {
   fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
 });
 
+// ---------------------------------------------------------------------------
+// Saved YouTube playlists — the user's recipe channels, refreshed to pick up new videos
+// ---------------------------------------------------------------------------
+
+export const youtubePlaylist = pgTable(
+  "youtube_playlist",
+  {
+    id: text("id")
+      .primaryKey()
+      .$default(() => randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // YouTube's own id (PL…), not a URL.
+    playlistId: text("playlist_id").notNull(),
+    title: text("title").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    refreshedAt: timestamp("refreshed_at").defaultNow().notNull(),
+  },
+  (table) => [unique("youtube_playlist_user_playlist_unique").on(table.userId, table.playlistId)],
+);
+
+// A video as last seen in the playlist. Whether it was imported isn't stored here: it's read from
+// the recipes (by video id) and the import queue, so it stays right however the video was imported.
+export const youtubePlaylistVideo = pgTable(
+  "youtube_playlist_video",
+  {
+    playlistId: text("playlist_id")
+      .notNull()
+      .references(() => youtubePlaylist.id, { onDelete: "cascade" }),
+    videoId: text("video_id").notNull(),
+    title: text("title").notNull(),
+    thumbnailUrl: text("thumbnail_url"),
+    position: integer("position").notNull(),
+    // "Ignorar": not a recipe the user wants, so it stops showing up as one to import.
+    ignored: boolean("ignored").notNull().default(false),
+    // When a refresh first found it.
+    addedAt: timestamp("added_at").defaultNow().notNull(),
+  },
+  (table) => [unique("youtube_playlist_video_unique").on(table.playlistId, table.videoId)],
+);
+
 export type IngredientSubstitute = {
   name: string;
   quantity: number | null;

@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, CalendarDays, ClipboardCheck, Settings, ShoppingCart } from "lucide-react";
+import { BookOpen, CalendarDays, ClipboardCheck, ListVideo, Settings, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/recipes", label: "Receitas", shortLabel: "Receitas", icon: BookOpen, public: true },
   { href: "/review", label: "Para revisar", shortLabel: "Revisar", icon: ClipboardCheck, public: false },
+  { href: "/playlists", label: "Playlists", shortLabel: "Playlists", icon: ListVideo, public: false },
   { href: "/plan", label: "Planejamento", shortLabel: "Plano", icon: CalendarDays, public: false },
   { href: "/shopping-list", label: "Lista de Compras", shortLabel: "Lista", icon: ShoppingCart, public: false },
   { href: "/settings", label: "Configurações", shortLabel: "Ajustes", icon: Settings, public: false },
@@ -53,7 +54,7 @@ export function DesktopNav({ isLoggedIn, pendingReviewCount = 0 }: { isLoggedIn:
             isActive(href) && "bg-secondary font-medium text-secondary-foreground hover:text-secondary-foreground",
           )}
         >
-          {/* Five links don't fit a tablet-width header with the full labels. */}
+          {/* Six links don't fit a tablet-width header with the full labels. */}
           <span className="lg:hidden">{shortLabel}</span>
           <span className="hidden lg:inline">{label}</span>
           {href === REVIEW_HREF && <CountBadge count={pendingReviewCount} />}
@@ -73,7 +74,7 @@ export function MobileTabBar({ pendingReviewCount = 0 }: { pendingReviewCount?: 
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md sm:hidden">
-      <ul className="grid grid-cols-5">
+      <ul className="grid grid-cols-6">
         {NAV_ITEMS.map(({ href, shortLabel, icon: Icon }) => {
           const active = isActive(href);
           return (

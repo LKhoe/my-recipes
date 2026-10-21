@@ -43,3 +43,17 @@ export function formatCountdown(totalSeconds: number): string {
   const seconds = String(totalSeconds % 60).padStart(2, "0");
   return hours > 0 ? `${hours}:${String(minutes).padStart(2, "0")}:${seconds}` : `${minutes}:${seconds}`;
 }
+
+/** How long ago, in words: "agora há pouco", "há 5 minutos", "há 3 horas", "ontem", "há 4 dias". */
+export function formatTimeAgo(date: Date, now: Date = new Date()): string {
+  const minutes = Math.floor((now.getTime() - date.getTime()) / 60_000);
+  if (minutes < 1) return "agora há pouco";
+  if (minutes < 60) return minutes === 1 ? "há 1 minuto" : `há ${minutes} minutos`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return hours === 1 ? "há 1 hora" : `há ${hours} horas`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "ontem";
+  if (days < 30) return `há ${days} dias`;
+  const months = Math.floor(days / 30);
+  return months === 1 ? "há 1 mês" : months < 12 ? `há ${months} meses` : "há mais de um ano";
+}
