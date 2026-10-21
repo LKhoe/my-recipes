@@ -36,8 +36,8 @@ export default function RootLayout({
       <body className={`${fraunces.variable} ${inter.variable} antialiased`}>
         <ViewTransitionsProvider>
           {children}
-          {/* Clear the mobile tab bar (components/AppNav.tsx) */}
-          <Toaster mobileOffset={{ bottom: "calc(4.5rem + env(safe-area-inset-bottom))" }} />
+          {/* At the top: the bottom corner is the import progress card's (desktop), and the mobile tab bar and its pill (components/AppNav.tsx, ImportProgress.tsx) */}
+          <Toaster position="top-right" mobileOffset={{ top: "calc(0.75rem + env(safe-area-inset-top))" }} />
         </ViewTransitionsProvider>
       </body>
     </html>
