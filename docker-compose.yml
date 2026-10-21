@@ -46,6 +46,8 @@ services:
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
       # Alexa API surface (SPEC §9.1) — shared-secret token, no device pairing in v1
       - ALEXA_API_TOKEN=${ALEXA_API_TOKEN}
+      # Alexa skill "Minhas Receitas": /api/alexa/skill refuses every request without it
+      - ALEXA_SKILL_ID=${ALEXA_SKILL_ID}
     labels:
       # Shown on the Container Health page (resource map, guides)
       - localinfra.url=${NEXT_PUBLIC_APP_URL:-}
