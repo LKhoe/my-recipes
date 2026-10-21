@@ -75,7 +75,7 @@ function buildSystemPrompt(context: ExtractionContext, allowEstimation: boolean)
 - Only a truly unquantifiable one ("sal a gosto") keeps quantity/unit null and "inferred": false.`
     : `- Set "quantity" only when the text states a number. Never estimate: "inferred" is always false.`;
 
-  return `You turn ${sourceLabel} into one structured cooking recipe. Reply with ONLY a JSON object, no markdown fences and no comments, of exactly this shape:
+  return `You turn ${sourceLabel} into one structured cooking recipe. Reply with ONLY a minified JSON object on a single line (no indentation, no markdown fences, no comments) of this shape:
 
 {
   "recipeFound": boolean,
@@ -95,6 +95,8 @@ function buildSystemPrompt(context: ExtractionContext, allowEstimation: boolean)
     "inferred": boolean
   }]
 }
+
+Leave out every key whose value would be null, false or []: a missing key means exactly that. Only "recipeFound" is always present.
 
 General
 - If the text has no recipe (no ingredients and no method), set "recipeFound": false and leave everything else empty or null. Never invent a recipe.
@@ -116,7 +118,7 @@ Ingredients
 - "unit" is one of these tokens: ${UNIT_TOKENS}. Convert other spellings: "colher de sopa" -> "csp", "colher de sobremesa" -> "csb", "colher de chá" or "colherinha" -> "cch", "xícara" -> "xíc", "gramas" -> "g". Whole items counted by number (ovos, cebolas, tomates, limões) take "unidade".
 - "quantity" is a plain decimal number ("1/2" -> 0.5, "1 e 1/2" -> 1.5; a range "2 a 3" -> 2). "quantity" and "unit" come as a pair: both set or both null, never one without the other.
 - "note" holds preparation or detail ("picada", "derretida", "em temperatura ambiente", "opcional", "a gosto"), or null. Never put "inferred" or "estimado" there.
-- "alternatives" lists substitutes the source offers for that ingredient ("manteiga ou margarina", "leite (ou água)", "100 g de manteiga ou 1/2 xícara de óleo"). The first option is the ingredient itself; the others go in "alternatives", each with its own quantity and unit (repeat the ingredient's amount when the source gives a single amount for both). Use [] when there is no substitute. Not for optional ingredients (that's "opcional" in "note") and not for different ingredients listed together.
+- "alternatives" lists substitutes the source offers for that ingredient ("manteiga ou margarina", "leite (ou água)", "100 g de manteiga ou 1/2 xícara de óleo"). The first option is the ingredient itself; the others go in "alternatives", each with its own quantity and unit (repeat the ingredient's amount when the source gives a single amount for both). Leave it out when there is no substitute. Not for optional ingredients (that's "opcional" in "note") and not for different ingredients listed together.
 - "group" names the part of the recipe an ingredient belongs to when the source splits the ingredients into parts ("CALDO:", "Para a massa", "Recheio", "Cobertura"): the part's short name in sentence case ("Caldo", "Massa", "Recheio"), the same on every ingredient of that part, part by part in the source's order. An ingredient that appears in more than one part is listed once per part with that part's own amount, never summed (1 cebola in "Caldo" and 1/2 cebola in "Risoto" stay two entries). A recipe with a single ingredient list has null on every ingredient.
 ${estimationRules}
 
@@ -130,8 +132,8 @@ Numbers
 - "servings" is a plain integer when stated ("serve 4 a 6 pessoas" -> 4, "rende 20 brigadeiros" -> 20); otherwise null.
 
 Example of two ingredient entries, from "200 g de manteiga sem sal (ou margarina)" and "Sal a gosto":
-{ "ingredientName": "manteiga sem sal", "quantity": 200, "unit": "g", "note": null, "group": null, "alternatives": [{ "ingredientName": "margarina", "quantity": 200, "unit": "g", "note": null }], "inferred": false }
-{ "ingredientName": "sal", "quantity": null, "unit": null, "note": "a gosto", "group": null, "alternatives": [], "inferred": false }`;
+{"ingredientName":"manteiga sem sal","quantity":200,"unit":"g","alternatives":[{"ingredientName":"margarina","quantity":200,"unit":"g"}]}
+{"ingredientName":"sal","note":"a gosto"}`;
 }
 
 // The model sometimes writes its estimate flag into the note too ("picada, inferred", "(estimado)").
@@ -185,7 +187,9 @@ export async function extractRecipeWithLLM(
       body: JSON.stringify({
         model: opts.tier ?? DEFAULT_LLM_TIER,
         temperature: 0.2,
-        max_tokens: 4096,
+        // The gateway's own cap (LLM_MAX_TOKENS). A recipe with many ingredients and steps passed
+        // 4096 and came back cut off mid-JSON.
+        max_tokens: 8192,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: buildSystemPrompt(opts.context, opts.allowEstimation) },
@@ -213,6 +217,9 @@ export async function extractRecipeWithLLM(
   const content: string | undefined = json?.choices?.[0]?.message?.content;
   if (!content) {
     throw new LLMExtractionError("LLM response had no message content.");
+  }
+  if (json.choices[0].finish_reason === "length") {
+    throw new LLMExtractionError("A resposta da IA ficou longa demais e veio cortada.");
   }
 
   let parsedJson: unknown;

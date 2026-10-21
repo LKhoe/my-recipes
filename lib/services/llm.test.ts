@@ -306,6 +306,22 @@ describe("extractRecipeWithLLM", () => {
     ).rejects.toThrow(LLMExtractionError);
   });
 
+  it("throws LLMExtractionError when the answer was cut off at max_tokens", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: '{"recipeFound":true,"steps":[{"te' }, finish_reason: "length" }] }),
+    }) as unknown as typeof fetch;
+
+    await expect(
+      extractRecipeWithLLM("text", {
+        context: "youtube",
+        allowEstimation: true,
+        sourceUrl: null,
+        videoUrl: null,
+      }),
+    ).rejects.toThrow("cortada");
+  });
+
   it("throws when LLM_API_KEY is not configured", async () => {
     delete process.env.LLM_API_KEY;
 
