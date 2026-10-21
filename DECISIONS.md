@@ -1249,3 +1249,59 @@ all of them hit the same `timedtext` 429, so none is a usable fallback.
 - **Caption downloads start at least 15 s apart** (`CAPTION_REQUEST_SPACING_MS`, in
   `services/youtube.ts`), for interactive imports too; concurrent callers line up. The queue's own
   75 s spacing between videos is unchanged and already above it.
+
+## 2026-10-21 — Alexa skill "Minhas Receitas" and ingredient substitutes
+
+The Echo Show 15 in the kitchen guides a recipe: pick it by name, see the ingredients, then the
+steps one by one, with timers on request. SPEC §9.2 was written before the skill existed; two of
+its calls changed once the actual use was clear.
+
+- **Selection by voice search, against §9.2's "avoid voice search".** That's how it's meant to be
+  used ("preparar cheesecake"). It's made reliable by the screen instead of by avoiding it: a
+  `AMAZON.SearchQuery` slot, carrier words stripped (`cleanRecipeQuery`), then
+  `searchRecipesByTitle` (substring OR pg_trgm `word_similarity` > 0.35, unaccented, migration
+  0010). One match or an exact title starts directly; otherwise up to five cards to pick by
+  number, ordinal ("a segunda", custom `ORDINAL` type) or touch. Recipes without a method sort last.
+- **No PIN pairing (`AlexaDevice` table).** A development-mode skill only runs on the developer
+  account's devices, so pairing would protect nothing. The endpoint checks Amazon's request
+  signature and timestamp (`ask-sdk-express-adapter`'s verifiers, used without Express) and the
+  skill id (`withSkillId`, fails closed when `ALEXA_SKILL_ID` is unset). `ALEXA_SKIP_VERIFICATION=1`
+  is for curl in dev and is ignored under `NODE_ENV=production`.
+- **In-process handlers (`ask-sdk-core`) instead of calling `/api/alexa/*` over HTTP.** The token
+  API stays for other clients; the skill uses the same services directly (`getActiveKitchenRecipe`,
+  `advanceKitchenStep`, `sendToKitchen`), so web cook mode and the Echo share `KitchenState`.
+  Starting a recipe on the Echo sends it to the kitchen at its own servings.
+- **Session kept open with the mic closed.** Responses with an APL document leave
+  `shouldEndSession` unset, so "Alexa, próximo" reaches the skill without its name for as long as
+  the screen shows it (`settings.idleTimeout`, 30 minutes). Untested on the real device yet: the
+  device may cap the idle timeout. "Alexa, abre minhas receitas" resumes from `KitchenState` either
+  way. The conversation phase (resume / choosing / ingredients / steps / done) is in session
+  attributes; a fresh session with an active recipe is treated as cooking it.
+- **Ingredients are shown, not read** ("Aqui estão os ingredientes…"), per the user. Dynamic
+  entities (`Dialog.UpdateDynamicEntities`) teach the `INGREDIENT` slot the recipe's own names.
+- **Timers only when asked** ("marcar timer"), per the user: the step only mentions its duration.
+  The Timers API is called with plain `fetch` and the request's `apiAccessToken`. Without the
+  permission, a voice `AskFor` prompt carries the pending timer in its `token`, so the timer is
+  created on `Connections.Response` even if the session attributes are gone.
+- **Spoken amounts** (`amountForSpeech`): units spelled out with gender and plural ("meia xícara",
+  "uma xícara e meia", "meio quilo"); weights and volumes rounded, never "266 gramas e dois terços".
+- **APL text always goes through the datasource** (`${data.…}`), never into the document, so a
+  "${" in a recipe can't be evaluated as an APL expression.
+
+### Substitutes ("Não tenho")
+
+- **Same service for the web and the Echo** (`suggestSubstitutes`). The recipe's own "ou" option
+  answers first with no model call. Otherwise one call to the free tier (`simple`, as the user
+  asked), JSON validated with zod, at most three substitutes, never the missing ingredient itself.
+- **Cached in `ingredient_substitution`** per recipe and ingredient key (lowercase, unaccented). A
+  row older than the recipe's `updatedAt` is ignored. An unparseable reply isn't cached.
+- **Computed only when asked; no prefetch** (the user turned down prefetching all ingredients when
+  a recipe starts). Alexa's 8 s response limit is fixed, so the skill sends a progressive response,
+  waits up to `SUBSTITUTION_WAIT_MS` (6 s), and otherwise says "pergunte de novo em alguns
+  segundos". The call keeps running into the cache, and a repeat question while it runs waits on
+  the same promise (in-flight map on `globalThis`).
+- **`requestLLMJson` extracted from `extractRecipeWithLLM`** so both share the gateway call and
+  its error mapping (429 → `LLMLimitError`). Import behavior is unchanged (its tests pass as is).
+- **Web**: ⇄ on each ingredient line (detail page and cook mode, signed-in members only), a popover
+  scaled to the servings on screen. `lib/rate-limit.ts` now keys limiters by name; substitutions
+  allow 30 per user per hour, imports keep 10.

@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "dev-alexa",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["ALEXA_SKIP_VERIFICATION=1", "npm", "run", "dev"],
+      "port": 3000
     }
   ]
 }

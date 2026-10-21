@@ -106,6 +106,7 @@ export function CookModeClient({
   steps,
   isActiveInKitchen,
   initialStepIndex,
+  canSubstitute,
 }: {
   recipeId: string;
   title: string;
@@ -114,6 +115,8 @@ export function CookModeClient({
   steps: RecipeStep[];
   isActiveInKitchen: boolean;
   initialStepIndex: number;
+  /** "Não tenho" on each ingredient, for signed-in members. */
+  canSubstitute: boolean;
 }) {
   const [currentStepIndex, setCurrentStepIndex] = useState(
     Math.min(initialStepIndex, Math.max(steps.length - 1, 0)),
@@ -214,7 +217,12 @@ export function CookModeClient({
           <div className="mb-2">
             <ScaleControls servings={servings} factor={factor} onAdjustServings={adjustServings} onSetFactor={setFactor} />
           </div>
-          <IngredientSections ingredients={ingredients} factor={factor} listClassName="gap-1.5" />
+          <IngredientSections
+            ingredients={ingredients}
+            factor={factor}
+            listClassName="gap-1.5"
+            substituteRecipeId={canSubstitute ? recipeId : undefined}
+          />
         </div>
       )}
 

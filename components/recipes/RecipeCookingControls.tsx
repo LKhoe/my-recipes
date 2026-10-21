@@ -40,6 +40,7 @@ export function RecipeCookingControls({
         originalServings={originalServings}
         ingredients={ingredients}
         onServingsChange={setServings}
+        substituteRecipeId={canSendToKitchen ? recipeId : undefined}
       />
     </div>
   );

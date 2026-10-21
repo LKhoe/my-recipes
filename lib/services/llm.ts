@@ -159,17 +159,18 @@ function stripJsonFences(content: string): string {
   return (fenced ? fenced[1] : content).trim();
 }
 
-export async function extractRecipeWithLLM(
-  text: string,
-  opts: {
-    context: ExtractionContext;
-    allowEstimation: boolean;
-    sourceUrl: string | null;
-    videoUrl: string | null;
-    imageUrl?: string | null;
-    tier?: LLMTier;
-  },
-): Promise<RecipeDraft> {
+/**
+ * One chat completion through LocalInfra's gateway, answered as a JSON object (parsed, not yet
+ * validated). Maps the gateway's failures to LLMExtractionError / LLMLimitError.
+ */
+export async function requestLLMJson(opts: {
+  system: string;
+  user: string;
+  tier?: LLMTier;
+  maxTokens: number;
+  temperature?: number;
+  signal?: AbortSignal;
+}): Promise<unknown> {
   const baseUrl = process.env.LLM_BASE_URL;
   const apiKey = process.env.LLM_API_KEY;
   if (!baseUrl || !apiKey) {
@@ -186,16 +187,15 @@ export async function extractRecipeWithLLM(
       },
       body: JSON.stringify({
         model: opts.tier ?? DEFAULT_LLM_TIER,
-        temperature: 0.2,
-        // The gateway's own cap (LLM_MAX_TOKENS). A recipe with many ingredients and steps passed
-        // 4096 and came back cut off mid-JSON.
-        max_tokens: 8192,
+        temperature: opts.temperature ?? 0.2,
+        max_tokens: opts.maxTokens,
         response_format: { type: "json_object" },
         messages: [
-          { role: "system", content: buildSystemPrompt(opts.context, opts.allowEstimation) },
-          { role: "user", content: text },
+          { role: "system", content: opts.system },
+          { role: "user", content: opts.user },
         ],
       }),
+      signal: opts.signal,
     });
   } catch (err) {
     // A network failure would otherwise surface as a generic 500 instead of an import error.
@@ -222,12 +222,32 @@ export async function extractRecipeWithLLM(
     throw new LLMExtractionError("A resposta da IA ficou longa demais e veio cortada.");
   }
 
-  let parsedJson: unknown;
   try {
-    parsedJson = JSON.parse(stripJsonFences(content));
+    return JSON.parse(stripJsonFences(content));
   } catch {
     throw new LLMExtractionError("Could not parse JSON from the LLM response.");
   }
+}
+
+export async function extractRecipeWithLLM(
+  text: string,
+  opts: {
+    context: ExtractionContext;
+    allowEstimation: boolean;
+    sourceUrl: string | null;
+    videoUrl: string | null;
+    imageUrl?: string | null;
+    tier?: LLMTier;
+  },
+): Promise<RecipeDraft> {
+  const parsedJson = await requestLLMJson({
+    system: buildSystemPrompt(opts.context, opts.allowEstimation),
+    user: text,
+    tier: opts.tier,
+    // The gateway's own cap (LLM_MAX_TOKENS). A recipe with many ingredients and steps passed
+    // 4096 and came back cut off mid-JSON.
+    maxTokens: 8192,
+  });
 
   const result = llmRecipeSchema.safeParse(parsedJson);
   if (!result.success) {

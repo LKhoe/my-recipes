@@ -57,6 +57,7 @@ redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`). Email/password work
 | `LLM_BASE_URL` / `LLM_API_KEY` | no (Phase 1+) | LLM import fallback, through LocalInfra's LLM gateway (`provision-app.sh ... --llm`) |
 | `YOUTUBE_API_KEY` | no (Phase 1+) | YouTube description fetch and playlist listing (playlist import needs it); transcripts need no key |
 | `ALEXA_API_TOKEN` | no (Phase 4+) | Shared-secret bearer token for `/api/alexa/*` |
+| `ALEXA_SKILL_ID` | no | The Alexa skill's id; `/api/alexa/skill` refuses requests without it (see "Alexa skill") |
 
 ## Scripts
 
@@ -113,6 +114,43 @@ npm run photos:upload -- uploads                         # copy the photos back 
 
 Verified end-to-end during development: restored a real export into a scratch database and
 confirmed all rows came back intact.
+
+## Alexa skill (Echo Show)
+
+"Minhas Receitas", a pt-BR custom skill (SPEC §9.2). The skill's endpoint is this app,
+`POST /api/alexa/skill`, through the Cloudflare tunnel; no Lambda. The interaction model and the
+manifest are in `skill-package/`.
+
+- "Alexa, pede para minhas receitas preparar cheesecake" (or "Alexa, abre minhas receitas", then
+  "preparar cheesecake") searches recipe titles by similarity. One match starts it; several are
+  listed on screen to pick by voice ("a segunda") or touch.
+- The ingredients come first, on screen. "O que posso usar no lugar de cream cheese?" (or a touch
+  on the ingredient) asks for substitutes: the recipe's own "ou" option, else the free LLM tier.
+  The web has the same thing as the ⇄ button on each ingredient, for signed-in members.
+- Then step by step: "Alexa, próximo", "voltar", "repetir", "quanto vai de açúcar?". "Marcar timer"
+  starts a device timer from the step's `durationMinutes`, or "marcar timer de 10 minutos". Timers
+  are only created when asked.
+- The skill and web cook mode share `KitchenState`, so both are on the same step, and "Alexa, abre
+  minhas receitas" resumes where you left off.
+
+Setup (once, with the Amazon account the Echo is on):
+
+1. In the [Alexa developer console](https://developer.amazon.com/alexa/console/ask), create a skill:
+   name "Minhas Receitas", locale Portuguese (BR), Custom model, "Provision your own" hosting.
+2. Interaction model → JSON editor: paste `skill-package/interactionModels/custom/pt-BR.json`,
+   then Build. Interfaces: turn on "Alexa Presentation Language". Permissions: turn on "Timers".
+3. Endpoint: HTTPS, `https://<public URL>/api/alexa/skill`, certificate "My development endpoint
+   has a certificate from a trusted certificate authority".
+   `skill-package/skill.json` is the same setup as a manifest, for the ASK CLI (replace
+   `SEU-DOMINIO` with the public host first).
+4. Copy the skill id into `ALEXA_SKILL_ID` in `.env` and redeploy (`./deploy.sh`).
+5. Test tab: set "Skill testing is enabled in" to Development. The skill then works on every device
+   on that account; nothing is published.
+6. In the Alexa app, open the skill (Mais → Skills e jogos → Suas skills → Desenvolvedor) and
+   allow Timers, or say "marcar timer" once and accept when the Echo asks.
+
+Locally, `ALEXA_SKIP_VERIFICATION=1 npm run dev` accepts unsigned request envelopes, for curl. In
+production every request must carry Amazon's signature.
 
 ## Alexa API surface (§9.1)
 

@@ -7,21 +7,35 @@ declare global {
 }
 
 const WINDOW_MS = 60 * 60 * 1000;
-const MAX_REQUESTS_PER_WINDOW = 10;
 
+// Keyed by `${limiter}:${userId}`, so each limiter counts on its own.
 const store: Map<string, number[]> = globalThis.importRateLimitStore ?? new Map();
 globalThis.importRateLimitStore = store;
 
-export function checkImportRateLimit(userId: string): { allowed: boolean; retryAfterSeconds?: number } {
+function checkRateLimit(
+  limiter: string,
+  userId: string,
+  maxPerWindow: number,
+): { allowed: boolean; retryAfterSeconds?: number } {
+  const key = `${limiter}:${userId}`;
   const now = Date.now();
-  const timestamps = (store.get(userId) ?? []).filter((t) => now - t < WINDOW_MS);
+  const timestamps = (store.get(key) ?? []).filter((t) => now - t < WINDOW_MS);
 
-  if (timestamps.length >= MAX_REQUESTS_PER_WINDOW) {
+  if (timestamps.length >= maxPerWindow) {
     const retryAfterMs = WINDOW_MS - (now - timestamps[0]);
     return { allowed: false, retryAfterSeconds: Math.ceil(retryAfterMs / 1000) };
   }
 
   timestamps.push(now);
-  store.set(userId, timestamps);
+  store.set(key, timestamps);
   return { allowed: true };
+}
+
+export function checkImportRateLimit(userId: string) {
+  return checkRateLimit("import", userId, 10);
+}
+
+// "Não tenho" on the web: free models, but each call still holds a slot on the gateway.
+export function checkSubstitutionRateLimit(userId: string) {
+  return checkRateLimit("substitution", userId, 30);
 }

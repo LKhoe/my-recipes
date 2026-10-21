@@ -4,6 +4,7 @@ import { kitchenState, recipe, SINGLETON_KITCHEN_STATE_ID } from "@/lib/db/schem
 import { groupAlternatives } from "@/lib/ingredient-alternatives";
 import { getRecipeById } from "@/lib/services/recipe";
 import { formatScaledQuantity, scaleQuantity } from "@/lib/scale";
+import type { RecipeDetail } from "@/types";
 
 export type KitchenStateView = {
   activeRecipeId: string | null;
@@ -97,6 +98,34 @@ export async function advanceKitchenStep(
     .where(eq(kitchenState.id, SINGLETON_KITCHEN_STATE_ID));
 
   return { currentStepIndex: nextIndex, totalSteps, currentStepText: row.steps[nextIndex]?.text ?? "" };
+}
+
+export type ActiveKitchenRecipe = {
+  recipe: RecipeDetail;
+  /** Servings being cooked: the kitchen's override, else the recipe's own. */
+  servings: number | null;
+  /** Multiplier for the stored quantities (formatIngredientLine's `factor`). */
+  factor: number;
+  currentStepIndex: number;
+};
+
+/** The Alexa skill's view of the kitchen: the full active recipe, its scaling and current step. */
+export async function getActiveKitchenRecipe(): Promise<ActiveKitchenRecipe | null> {
+  const state = await getKitchenState();
+  if (!state?.activeRecipeId) return null;
+
+  const recipeDetail = await getRecipeById(state.activeRecipeId);
+  if (!recipeDetail) return null;
+
+  const servings = state.servingsOverride ?? recipeDetail.servings;
+  const factor = state.servingsOverride && recipeDetail.servings ? state.servingsOverride / recipeDetail.servings : 1;
+  const lastIndex = Math.max(recipeDetail.steps.length - 1, 0);
+  return {
+    recipe: recipeDetail,
+    servings,
+    factor,
+    currentStepIndex: Math.min(state.currentStepIndex, lastIndex),
+  };
 }
 
 export type AlexaScaledIngredient = { ingredientName: string; quantity: string; unit: string | null };

@@ -27,6 +27,7 @@ export default async function CookModePage({ params }: { params: Promise<{ id: s
       steps={recipe.steps}
       isActiveInKitchen={isActiveInKitchen}
       initialStepIndex={isActiveInKitchen ? kitchenState!.currentStepIndex : 0}
+      canSubstitute={Boolean(session?.user)}
     />
   );
 }

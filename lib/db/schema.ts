@@ -503,6 +503,31 @@ export const videoTranscript = pgTable("video_transcript", {
   fetchedAt: timestamp("fetched_at").defaultNow().notNull(),
 });
 
+export type IngredientSubstitute = {
+  name: string;
+  quantity: number | null;
+  unit: string | null;
+  note: string | null;
+};
+
+// "Não tenho X": what the model suggested using instead, kept per recipe and ingredient so asking
+// again (on the web or the Echo, which has 8 s to answer) is instant. A row older than the recipe's
+// last edit is ignored, since the amounts or the method it was based on may have changed.
+export const ingredientSubstitution = pgTable(
+  "ingredient_substitution",
+  {
+    recipeId: text("recipe_id")
+      .notNull()
+      .references(() => recipe.id, { onDelete: "cascade" }),
+    // Lowercase, accent-free ingredient name (lib/services/substitution.ts `ingredientKey`).
+    ingredientKey: text("ingredient_key").notNull(),
+    suggestions: jsonb("suggestions").$type<IngredientSubstitute[]>().notNull(),
+    tip: text("tip"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [unique("ingredient_substitution_unique").on(table.recipeId, table.ingredientKey)],
+);
+
 // ---------------------------------------------------------------------------
 // Kitchen state — circle-wide singleton (SPEC §9.1)
 // ---------------------------------------------------------------------------

@@ -302,12 +302,12 @@ public/
   video-understanding models; description + captions only.
 - No per-step video timestamps in the UI (the `steps` schema allows them for later).
 - No Alexa skill in v1 — but v1 ships its hooks (per-step `durationMinutes`, `KitchenState` /
-  "Send to kitchen", `/api/alexa/*`); see §9.
+  "Send to kitchen", `/api/alexa/*`); see §9. The skill itself came later (§9.2).
 
-## 9. Future: Alexa Companion Skill (Echo Show 15)
+## 9. Alexa Companion Skill (Echo Show 15)
 
-A voice/touch companion for following the active recipe hands-free in the kitchen. Not built in
-v1, but v1 deliberately includes its hooks so the skill can be added without schema or API churn.
+A voice/touch companion for following a recipe hands-free in the kitchen. v1 shipped its hooks
+(§9.1); the skill itself (§9.2) was built on them afterwards.
 
 ### 9.1 Hooks shipped in v1
 - **Per-step `durationMinutes`** in the steps jsonb, extracted at import time and editable —
@@ -320,23 +320,30 @@ v1, but v1 deliberately includes its hooks so the skill can be added without sch
   - `GET /api/alexa/quantity?ingredient=...` — scaled quantity lookup for one ingredient
   - `POST /api/alexa/shopping-list` — add an item by voice
 
-### 9.2 Skill design (when built)
+### 9.2 Skill design
 - **Thin skill, fat app**: all logic and data stay in the Next.js app; the skill is an
-  interaction model plus a small handler that calls `/api/alexa/*`. The custom skill endpoint
-  points directly at the self-hosted app over HTTPS (valid public cert already required for
-  OAuth) — no Lambda, consistent with the no-extra-infra philosophy.
-- **No OAuth account linking**: PIN pairing instead. On first use the skill reads out a short
-  code; the user enters it in the web app, and the server maps that Alexa `userId` to the
-  circle (`AlexaDevice` table — id, alexaUserId, pairedByUserId, createdAt). Everyone shares
-  one collection, so per-person identity on the Echo doesn't matter.
-- **Recipe selection avoids voice search** (free-form dish-name matching is unreliable):
-  - "start dinner" → today's dinner slot from the circle meal plan
-  - "open My Recipes" → resumes the "Send to kitchen" active recipe
-  - name search is a fallback at best, never the primary path.
-- **v1 intent set (keep it to ~6)**: launch/resume, start today's meal, next/previous/repeat
-  step, "how much ⟨ingredient⟩?" (answered scaled), set timer from the current step's
-  `durationMinutes` (Alexa Skills **Timers API**, `alerts:timers` permission), add item to
-  shopping list.
+  interaction model (`skill-package/`) plus handlers served in-process at `POST /api/alexa/skill`
+  (lib/alexa/). The custom skill endpoint points directly at the self-hosted app over HTTPS
+  (valid public cert already required for OAuth) — no Lambda, consistent with the no-extra-infra
+  philosophy.
+- **No account linking, no PIN pairing**: the skill stays in development mode, which only runs on
+  devices of the developer's Amazon account. Every request is checked against Amazon's signature
+  and the skill id (`ALEXA_SKILL_ID`); everyone shares one collection, so per-person identity on
+  the Echo doesn't matter.
+- **Recipe selection by name** ("preparar cheesecake"): titles are matched by similarity
+  (pg_trgm `word_similarity` over unaccented titles, plus substring), and when more than one
+  matches, up to five are shown on screen to pick by number or touch. Resuming ("abre minhas
+  receitas" → "continuar") picks up the `KitchenState` active recipe.
+- **Flow**: ingredients first (shown, not read aloud: "Aqui estão os ingredientes…"), then the
+  steps one at a time, read aloud and shown. Starting a recipe from the Echo sends it to the
+  kitchen, so web cook mode follows the same step.
+- **Intent set**: start by name, pick an option, next/previous/repeat, show ingredients,
+  "quanto vai de ⟨ingrediente⟩?" (answered scaled), "o que posso usar no lugar de ⟨ingrediente⟩?"
+  (§9.3), and "marcar timer" (Alexa **Timers API**, `alerts::timers:skill:readwrite`), from the
+  current step's `durationMinutes` or a spoken duration. Timers start only when asked.
+- **The session stays open while cooking**: responses carry an APL document and leave
+  `shouldEndSession` unset, so the Echo Show keeps the skill on screen with the mic closed and
+  "Alexa, próximo" goes to the skill without its name.
 - **Echo Show 15 display**: APL layout for the 15.6" landscape touchscreen — current step large,
   photo + ingredient checklist beside it, touch next/back. Mirrors the web cook-mode design.
   A "Tonight's dinner" home-screen widget is a possible follow-up.
@@ -345,3 +352,13 @@ v1, but v1 deliberately includes its hooks so the skill can be added without sch
 - **Locale** must match the language recipes are stored in, since Alexa reads step text aloud.
 - **Cheap pre-validation**: before building the skill, use the web cook-mode page in the Echo's
   Silk browser to learn which voice interactions are actually missed.
+
+### 9.3 Ingredient substitutes ("Não tenho")
+- Asked from the Echo ("o que posso usar no lugar de…", or a touch on the ingredient) or from the
+  web (the ⇄ button on each ingredient, signed-in members only, rate-limited per user).
+- The recipe's own "ou" option answers first, without a model. Otherwise the free LLM tier
+  (`simple`) suggests up to three substitutes with amounts for the recipe, cached per recipe and
+  ingredient (`ingredient_substitution`) until the recipe is edited.
+- Only computed when asked. Alexa allows 8 s per response: the skill says "Deixa eu ver…"
+  (progressive response) and waits up to ~6 s; past that it answers "pergunte de novo", and the
+  call keeps running into the cache so the next ask is instant.

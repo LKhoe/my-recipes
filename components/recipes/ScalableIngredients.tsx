@@ -9,11 +9,14 @@ export function ScalableIngredients({
   originalServings,
   ingredients,
   onServingsChange,
+  substituteRecipeId,
 }: {
   originalServings: number | null;
   ingredients: RecipeIngredientInput[];
   /** Lets a parent (e.g. "Send to kitchen") know the servings the user is currently viewing. */
   onServingsChange?: (servings: number | null) => void;
+  /** Shows "Não tenho" on each ingredient (signed-in members only). */
+  substituteRecipeId?: string;
 }) {
   const { factor, servings, setFactor, adjustServings } = useIngredientScaling(originalServings, onServingsChange);
 
@@ -29,6 +32,7 @@ export function ScalableIngredients({
           factor={factor}
           listClassName="gap-2"
           itemClassName="border-b border-border pb-2 last:border-0"
+          substituteRecipeId={substituteRecipeId}
         />
       </div>
     </div>

@@ -1,0 +1,42 @@
+{
+  "manifest": {
+    "manifestVersion": "1.0",
+    "publishingInformation": {
+      "locales": {
+        "pt-BR": {
+          "name": "Minhas Receitas",
+          "summary": "Guia de preparo das receitas do My Recipes, passo a passo.",
+          "description": "Escolha uma receita do seu My Recipes pelo nome, veja os ingredientes na tela, pergunte o que usar no lugar de um ingrediente que faltou e siga o modo de preparo passo a passo, com timers quando pedir.",
+          "examplePhrases": [
+            "Alexa, abre minhas receitas",
+            "Alexa, pede para minhas receitas preparar cheesecake",
+            "Alexa, pede para minhas receitas o próximo passo"
+          ],
+          "keywords": ["receitas", "cozinha", "culinária"]
+        }
+      },
+      "isAvailableWorldwide": false,
+      "distributionCountries": ["BR"],
+      "category": "COOKING_AND_RECIPE",
+      "testingInstructions": "Skill privada, só em modo de desenvolvimento."
+    },
+    "privacyAndCompliance": {
+      "allowsPurchases": false,
+      "usesPersonalInfo": false,
+      "isChildDirected": false,
+      "isExportCompliant": true,
+      "containsAds": false,
+      "locales": { "pt-BR": {} }
+    },
+    "permissions": [{ "name": "alerts::timers:skill:readwrite" }],
+    "apis": {
+      "custom": {
+        "endpoint": {
+          "uri": "https://SEU-DOMINIO/api/alexa/skill",
+          "sslCertificateType": "Trusted"
+        },
+        "interfaces": [{ "type": "ALEXA_PRESENTATION_APL" }]
+      }
+    }
+  }
+}

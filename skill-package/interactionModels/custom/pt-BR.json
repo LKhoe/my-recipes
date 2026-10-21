@@ -1,0 +1,225 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "minhas receitas",
+      "intents": [
+        {
+          "name": "StartRecipeIntent",
+          "slots": [{ "name": "recipeName", "type": "AMAZON.SearchQuery" }],
+          "samples": [
+            "preparar {recipeName}",
+            "prepara {recipeName}",
+            "iniciar preparo de {recipeName}",
+            "iniciar o preparo de {recipeName}",
+            "iniciar o preparo do {recipeName}",
+            "iniciar o preparo da {recipeName}",
+            "inicia o preparo de {recipeName}",
+            "fazer {recipeName}",
+            "cozinhar {recipeName}",
+            "quero fazer {recipeName}",
+            "quero preparar {recipeName}",
+            "quero cozinhar {recipeName}",
+            "vamos fazer {recipeName}",
+            "receita de {recipeName}",
+            "abrir a receita de {recipeName}",
+            "abre a receita de {recipeName}",
+            "me ajuda a fazer {recipeName}",
+            "me guia no preparo de {recipeName}"
+          ]
+        },
+        {
+          "name": "SelectRecipeIntent",
+          "slots": [
+            { "name": "number", "type": "AMAZON.NUMBER" },
+            { "name": "ordinal", "type": "ORDINAL" }
+          ],
+          "samples": [
+            "{number}",
+            "número {number}",
+            "a {number}",
+            "a de número {number}",
+            "opção {number}",
+            "a opção {number}",
+            "receita {number}",
+            "a receita {number}",
+            "{ordinal}",
+            "a {ordinal}",
+            "o {ordinal}",
+            "a {ordinal} opção",
+            "a {ordinal} receita",
+            "quero a {ordinal}",
+            "quero a {number}"
+          ]
+        },
+        {
+          "name": "IngredientsIntent",
+          "slots": [],
+          "samples": [
+            "ingredientes",
+            "mostrar ingredientes",
+            "mostrar os ingredientes",
+            "mostra os ingredientes",
+            "quais são os ingredientes",
+            "voltar para os ingredientes",
+            "volta para os ingredientes",
+            "lista de ingredientes",
+            "ver ingredientes"
+          ]
+        },
+        {
+          "name": "QuantityIntent",
+          "slots": [{ "name": "ingredient", "type": "INGREDIENT" }],
+          "samples": [
+            "quanto vai de {ingredient}",
+            "quanto de {ingredient}",
+            "quanto é de {ingredient}",
+            "qual a quantidade de {ingredient}",
+            "qual é a quantidade de {ingredient}",
+            "quanto preciso de {ingredient}",
+            "quanto eu uso de {ingredient}",
+            "quantos {ingredient}",
+            "quantas {ingredient}",
+            "quanto {ingredient}"
+          ]
+        },
+        {
+          "name": "SubstituteIntent",
+          "slots": [{ "name": "ingredient", "type": "INGREDIENT" }],
+          "samples": [
+            "o que posso usar no lugar de {ingredient}",
+            "o que posso usar no lugar do {ingredient}",
+            "o que posso usar no lugar da {ingredient}",
+            "o que eu posso usar no lugar de {ingredient}",
+            "o que eu uso no lugar de {ingredient}",
+            "o que usar no lugar de {ingredient}",
+            "o que substitui {ingredient}",
+            "o que substitui o {ingredient}",
+            "o que substitui a {ingredient}",
+            "não tenho {ingredient}",
+            "eu não tenho {ingredient}",
+            "estou sem {ingredient}",
+            "acabou o {ingredient}",
+            "acabou a {ingredient}",
+            "substituto para {ingredient}",
+            "substituto de {ingredient}",
+            "substituir {ingredient}",
+            "como substituir {ingredient}",
+            "com o que eu substituo {ingredient}",
+            "pelo que eu troco {ingredient}"
+          ]
+        },
+        {
+          "name": "TimerIntent",
+          "slots": [{ "name": "duration", "type": "AMAZON.DURATION" }],
+          "samples": [
+            "marcar timer",
+            "marcar o timer",
+            "marca o timer",
+            "marca timer",
+            "iniciar timer",
+            "iniciar o timer",
+            "começar timer",
+            "começar o timer",
+            "ligar timer",
+            "liga o timer",
+            "marcar o tempo",
+            "marcar cronômetro",
+            "marcar timer de {duration}",
+            "marca um timer de {duration}",
+            "marcar um timer de {duration}",
+            "timer de {duration}",
+            "um timer de {duration}",
+            "marcar {duration}",
+            "marca {duration}"
+          ]
+        },
+        {
+          "name": "AMAZON.NextIntent",
+          "samples": [
+            "próximo passo",
+            "próximo",
+            "continuar",
+            "continua",
+            "seguir",
+            "pode seguir",
+            "avançar",
+            "pronto",
+            "feito",
+            "já fiz",
+            "já separei",
+            "já separei tudo",
+            "tudo separado",
+            "começar o preparo",
+            "vamos lá"
+          ]
+        },
+        {
+          "name": "AMAZON.PreviousIntent",
+          "samples": ["voltar", "volta", "passo anterior", "volta um passo", "voltar um passo"]
+        },
+        {
+          "name": "AMAZON.RepeatIntent",
+          "samples": ["repetir", "repete", "de novo", "fala de novo", "qual é o passo", "o que eu faço agora"]
+        },
+        { "name": "AMAZON.HelpIntent", "samples": [] },
+        { "name": "AMAZON.StopIntent", "samples": [] },
+        { "name": "AMAZON.CancelIntent", "samples": [] },
+        { "name": "AMAZON.NavigateHomeIntent", "samples": [] },
+        { "name": "AMAZON.FallbackIntent", "samples": [] }
+      ],
+      "types": [
+        {
+          "name": "ORDINAL",
+          "values": [
+            { "id": "1", "name": { "value": "primeira", "synonyms": ["primeiro", "a primeira", "o primeiro"] } },
+            { "id": "2", "name": { "value": "segunda", "synonyms": ["segundo", "a segunda", "o segundo"] } },
+            { "id": "3", "name": { "value": "terceira", "synonyms": ["terceiro", "a terceira", "o terceiro"] } },
+            { "id": "4", "name": { "value": "quarta", "synonyms": ["quarto", "a quarta", "o quarto"] } },
+            { "id": "5", "name": { "value": "quinta", "synonyms": ["quinto", "a quinta", "o quinto"] } },
+            { "id": "-1", "name": { "value": "última", "synonyms": ["último", "a última", "o último"] } }
+          ]
+        },
+        {
+          "name": "INGREDIENT",
+          "values": [
+            { "name": { "value": "farinha de trigo", "synonyms": ["farinha"] } },
+            { "name": { "value": "açúcar" } },
+            { "name": { "value": "açúcar mascavo" } },
+            { "name": { "value": "ovo", "synonyms": ["ovos"] } },
+            { "name": { "value": "manteiga" } },
+            { "name": { "value": "margarina" } },
+            { "name": { "value": "leite" } },
+            { "name": { "value": "leite condensado" } },
+            { "name": { "value": "creme de leite" } },
+            { "name": { "value": "cream cheese" } },
+            { "name": { "value": "requeijão" } },
+            { "name": { "value": "iogurte natural", "synonyms": ["iogurte"] } },
+            { "name": { "value": "fermento em pó", "synonyms": ["fermento"] } },
+            { "name": { "value": "bicarbonato de sódio", "synonyms": ["bicarbonato"] } },
+            { "name": { "value": "amido de milho" } },
+            { "name": { "value": "chocolate em pó" } },
+            { "name": { "value": "cacau em pó" } },
+            { "name": { "value": "essência de baunilha", "synonyms": ["baunilha"] } },
+            { "name": { "value": "canela" } },
+            { "name": { "value": "mel" } },
+            { "name": { "value": "óleo" } },
+            { "name": { "value": "azeite" } },
+            { "name": { "value": "sal" } },
+            { "name": { "value": "cebola" } },
+            { "name": { "value": "alho" } },
+            { "name": { "value": "tomate" } },
+            { "name": { "value": "limão" } },
+            { "name": { "value": "vinagre" } },
+            { "name": { "value": "queijo parmesão", "synonyms": ["parmesão"] } },
+            { "name": { "value": "queijo muçarela", "synonyms": ["muçarela", "mussarela"] } },
+            { "name": { "value": "vinho branco" } },
+            { "name": { "value": "caldo de galinha" } },
+            { "name": { "value": "biscoito maisena" } },
+            { "name": { "value": "gelatina sem sabor" } },
+            { "name": { "value": "coco ralado" } }
+          ]
+        }
+      ]
+    }
+  }
+}

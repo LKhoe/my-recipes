@@ -9,6 +9,7 @@ import {
   getRecipeById,
   listRecipes,
   markRecipeReviewed,
+  searchRecipesByTitle,
   softDeleteRecipe,
   updateRecipe,
 } from "./recipe";
@@ -283,5 +284,52 @@ describe("findRecipesBySource", () => {
 
     await softDeleteRecipe(fromPage, userId);
     expect(await findRecipesBySource(`https://site-${stamp}.com.br/receita/pudim`)).toEqual([]);
+  });
+});
+
+describe("searchRecipesByTitle", () => {
+  const stamp = Date.now();
+  // A made-up dish word, so the dev database's own recipes never match.
+  const dish = `zimbrolete${stamp.toString(36).replace(/\d/g, "")}`;
+  let userId: string;
+
+  afterAll(async () => {
+    if (userId) await db.delete(user).where(eq(user.id, userId));
+  });
+
+  it("ranks recipes with a method, then the exact title, then the rest; skips deleted ones; survives a typo", async () => {
+    const [created] = await db
+      .insert(user)
+      .values({ email: `title-search-${stamp}@example.com`, name: "Busca" })
+      .returning({ id: user.id });
+    userId = created.id;
+
+    const base = {
+      description: null,
+      servings: null,
+      prepTime: null,
+      cookTime: null,
+      ingredients: [],
+      categoryIds: [],
+      tags: [],
+      sourceUrl: null,
+      videoUrl: null,
+    };
+    const withSteps = { ...base, steps: [{ text: "Misture." }] };
+    const { id: noMethod } = await createRecipe(userId, { ...base, steps: [], title: `Torta ${dish} sem preparo` });
+    const { id: lemon } = await createRecipe(userId, { ...withSteps, title: `Torta ${dish} de limão` });
+    const { id: exact } = await createRecipe(userId, { ...withSteps, title: `Torta ${dish}` });
+    const { id: deleted } = await createRecipe(userId, { ...withSteps, title: `Torta ${dish} antiga` });
+    await softDeleteRecipe(deleted, userId);
+
+    const results = await searchRecipesByTitle(`torta ${dish}`);
+    expect(results.map((r) => r.id)).toEqual([exact, lemon, noMethod]);
+    expect(results[2].hasSteps).toBe(false);
+
+    // One letter misheard, accents aside.
+    const typo = await searchRecipesByTitle(`torta ${dish.replace("zimbro", "zinbro")} de limao`);
+    expect(typo[0]?.id).toBe(lemon);
+
+    expect(await searchRecipesByTitle("   ")).toEqual([]);
   });
 });

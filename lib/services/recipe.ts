@@ -314,6 +314,55 @@ export async function listRecipes(filters: RecipeListFilters = {}): Promise<Reci
   return results;
 }
 
+export type RecipeNameMatch = {
+  id: string;
+  title: string;
+  imagePath: string | null;
+  hasSteps: boolean;
+};
+
+// Below this, word_similarity() matches are mostly noise ("bolo" vs "molho"); a substring match is
+// always kept.
+const NAME_SIMILARITY_THRESHOLD = 0.35;
+
+/**
+ * The Alexa skill's "preparar cheesecake": recipes whose title contains the spoken name or is
+ * close to it (pg_trgm's word_similarity, migration 0010, survives a misheard letter or two).
+ * Recipes with a method come first, then an exact title, then substring matches, then similarity.
+ */
+export async function searchRecipesByTitle(query: string, limit = 5): Promise<RecipeNameMatch[]> {
+  const q = query.trim();
+  if (!q) return [];
+
+  const title = sql`unaccent(lower(${recipe.title}))`;
+  const needle = sql`unaccent(lower(${q}))`;
+  const hasSteps = sql<boolean>`jsonb_array_length(${recipe.steps}) > 0`;
+  const contains = sql`${title} like '%' || ${needle} || '%'`;
+  const score = sql`word_similarity(${needle}, ${title})`;
+
+  return db
+    .select({
+      id: recipe.id,
+      title: recipe.title,
+      imagePath: sql<string | null>`(
+        select ${recipeImage.path} from ${recipeImage}
+        where ${recipeImage.recipeId} = ${recipe.id}
+        order by ${recipeImage.order} limit 1
+      )`,
+      hasSteps,
+    })
+    .from(recipe)
+    .where(and(isNull(recipe.deletedAt), or(contains, sql`${score} > ${NAME_SIMILARITY_THRESHOLD}`)))
+    .orderBy(
+      desc(hasSteps),
+      desc(sql`${title} = ${needle}`),
+      desc(contains),
+      desc(score),
+      desc(recipe.createdAt),
+    )
+    .limit(limit);
+}
+
 export async function getRecipeById(recipeId: string): Promise<RecipeDetail | null> {
   const [row] = await db
     .select({
