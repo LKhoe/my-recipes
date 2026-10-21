@@ -122,8 +122,11 @@ confirmed all rows came back intact.
 manifest are in `skill-package/`.
 
 - "Alexa, pede para minhas receitas preparar cheesecake" (or "Alexa, abre minhas receitas", then
-  "preparar cheesecake") searches recipe titles by similarity. One match starts it; several are
-  listed on screen to pick by voice ("a segunda") or touch.
+  "preparar cheesecake") searches recipe titles by similarity; the start screen also has a search
+  box for typing. One match starts it; several (up to ten) are listed on screen to pick by voice
+  ("a segunda") or touch.
+- "Silenciar" on any screen turns the voice off (it stays off until "Ativar voz"): answers then
+  appear on screen.
 - The ingredients come first, on screen. "O que posso usar no lugar de cream cheese?" (or a touch
   on the ingredient) asks for substitutes: the recipe's own "ou" option, else the free LLM tier.
   The web has the same thing as the ⇄ button on each ingredient, for signed-in members.
@@ -140,7 +143,11 @@ Setup (once, with the Amazon account the Echo is on):
 2. Interaction model → JSON editor: paste `skill-package/interactionModels/custom/pt-BR.json`,
    then Build. Interfaces: turn on "Alexa Presentation Language". Permissions: turn on "Timers".
 3. Endpoint: HTTPS, `https://<public URL>/api/alexa/skill`, certificate "My development endpoint
-   has a certificate from a trusted certificate authority".
+   is a sub-domain of a domain that has a wildcard certificate from a certificate authority":
+   Cloudflare's edge certificate is `*.<zone>`. With the "trusted certificate authority" option
+   Alexa never sends the request and the simulator only says "Não foi possível acessar a Skill
+   solicitada" (`SKILL_ENDPOINT_ERROR` in the Device Log). Save, then Build the model again: the
+   endpoint change only takes effect after a build.
    `skill-package/skill.json` is the same setup as a manifest, for the ASK CLI (replace
    `SEU-DOMINIO` with the public host first).
 4. Copy the skill id into `ALEXA_SKILL_ID` in `.env` and redeploy (`./deploy.sh`).

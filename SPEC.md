@@ -332,7 +332,8 @@ A voice/touch companion for following a recipe hands-free in the kitchen. v1 shi
   the Echo doesn't matter.
 - **Recipe selection by name** ("preparar cheesecake"): titles are matched by similarity
   (pg_trgm `word_similarity` over unaccented titles, plus substring), and when more than one
-  matches, up to five are shown on screen to pick by number or touch. Resuming ("abre minhas
+  matches, up to ten are shown on screen to pick by number or touch (only five or fewer are read
+  aloud). Resuming ("abre minhas
   receitas" → "continuar") picks up the `KitchenState` active recipe.
 - **Flow**: ingredients first (shown, not read aloud: "Aqui estão os ingredientes…"), then the
   steps one at a time, read aloud and shown. Starting a recipe from the Echo sends it to the
@@ -341,6 +342,11 @@ A voice/touch companion for following a recipe hands-free in the kitchen. v1 shi
   "quanto vai de ⟨ingrediente⟩?" (answered scaled), "o que posso usar no lugar de ⟨ingrediente⟩?"
   (§9.3), and "marcar timer" (Alexa **Timers API**, `alerts::timers:skill:readwrite`), from the
   current step's `durationMinutes` or a spoken duration. Timers start only when asked.
+- **Search by typing**: the start screen has a search box (the Echo's on-screen keyboard) and a
+  "Continuar" button for the recipe in progress. On a screen the mic stays closed there, so the
+  screen doesn't time out while someone types.
+- **"Silenciar"**: a button on every screen mutes the skill (kept in `KitchenState.alexaMuted`).
+  Muted, it never speaks or opens the mic; answers that would only be heard are shown on screen.
 - **The session stays open while cooking**: responses carry an APL document and leave
   `shouldEndSession` unset, so the Echo Show keeps the skill on screen with the mic closed and
   "Alexa, próximo" goes to the skill without its name.

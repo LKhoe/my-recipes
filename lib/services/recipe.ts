@@ -340,17 +340,8 @@ export async function searchRecipesByTitle(query: string, limit = 5): Promise<Re
   const contains = sql`${title} like '%' || ${needle} || '%'`;
   const score = sql`word_similarity(${needle}, ${title})`;
 
-  return db
-    .select({
-      id: recipe.id,
-      title: recipe.title,
-      imagePath: sql<string | null>`(
-        select ${recipeImage.path} from ${recipeImage}
-        where ${recipeImage.recipeId} = ${recipe.id}
-        order by ${recipeImage.order} limit 1
-      )`,
-      hasSteps,
-    })
+  const rows = await db
+    .select({ id: recipe.id, title: recipe.title, hasSteps })
     .from(recipe)
     .where(and(isNull(recipe.deletedAt), or(contains, sql`${score} > ${NAME_SIMILARITY_THRESHOLD}`)))
     .orderBy(
@@ -361,6 +352,19 @@ export async function searchRecipesByTitle(query: string, limit = 5): Promise<Re
       desc(recipe.createdAt),
     )
     .limit(limit);
+  if (rows.length === 0) return [];
+
+  // Each recipe's first photo. A correlated subquery in the select above doesn't work: drizzle
+  // writes its columns unqualified, so "recipe_id" = "id" compared the image with itself.
+  const images = await db
+    .select({ recipeId: recipeImage.recipeId, path: recipeImage.path })
+    .from(recipeImage)
+    .where(inArray(recipeImage.recipeId, rows.map((r) => r.id)))
+    .orderBy(recipeImage.order);
+  const firstImage = new Map<string, string>();
+  for (const image of images) if (!firstImage.has(image.recipeId)) firstImage.set(image.recipeId, image.path);
+
+  return rows.map((r) => ({ ...r, imagePath: firstImage.get(r.id) ?? null }));
 }
 
 export async function getRecipeById(recipeId: string): Promise<RecipeDetail | null> {

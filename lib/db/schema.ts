@@ -543,6 +543,9 @@ export const kitchenState = pgTable(
     }),
     servingsOverride: integer("servings_override"),
     currentStepIndex: integer("current_step_index").notNull().default(0),
+    // The Echo's "Silenciar" button: the skill answers on screen only. Kept here, not in the
+    // Alexa session, so it holds the next time the skill is opened.
+    alexaMuted: boolean("alexa_muted").notNull().default(false),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => [

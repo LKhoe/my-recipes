@@ -93,6 +93,7 @@ describe("parseChoice", () => {
     expect(parseChoice(null, "-1")).toBe(-1);
     expect(parseChoice(null, "segunda")).toBe(2);
     expect(parseChoice(null, "a Última")).toBe(-1);
+    expect(parseChoice(null, "a décima")).toBe(10);
   });
 
   it("is null when nothing usable was said", () => {
@@ -128,6 +129,12 @@ describe("sentences", () => {
   it("names the last step and offers a timer only when the step has a time", () => {
     expect(stepSpeech(0, 3, "Misture tudo.")).toBe("Passo 1. Misture tudo.");
     expect(stepSpeech(2, 3, "Asse.", 40)).toBe('Último passo. Asse. Esse passo leva 40 minutos. Diga "marcar timer" quando quiser.');
+  });
+
+  it("doesn't read more than five options aloud", () => {
+    expect(chooseSpeech(["a", "b", "c", "d", "e", "f"])).toBe(
+      "Achei 6 receitas. Diga o número da que você quer, ou toque na tela.",
+    );
   });
 
   it("numbers the options to choose from", () => {

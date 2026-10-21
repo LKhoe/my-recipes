@@ -9,6 +9,8 @@ const kitchen = vi.hoisted(() => ({
   getActiveKitchenRecipe: vi.fn(),
   sendToKitchen: vi.fn(),
   advanceKitchenStep: vi.fn(),
+  getAlexaMuted: vi.fn(),
+  setAlexaMuted: vi.fn(),
 }));
 const recipes = vi.hoisted(() => ({ searchRecipesByTitle: vi.fn() }));
 const substitution = vi.hoisted(() => ({ suggestSubstitutes: vi.fn() }));
@@ -135,6 +137,7 @@ beforeEach(() => {
   fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
   vi.stubGlobal("fetch", fetchMock);
   kitchen.sendToKitchen.mockResolvedValue(undefined);
+  kitchen.getAlexaMuted.mockResolvedValue(false);
 });
 
 afterEach(() => {
@@ -146,9 +149,27 @@ describe("choosing a recipe by name", () => {
   it("asks again when nothing matches", async () => {
     recipes.searchRecipesByTitle.mockResolvedValue([]);
     const res = await send(intent("StartRecipeIntent", { recipeName: "a receita de pudim" }));
-    expect(recipes.searchRecipesByTitle).toHaveBeenCalledWith("pudim", 5);
+    expect(recipes.searchRecipesByTitle).toHaveBeenCalledWith("pudim", 10);
     expect(speech(res)).toContain("Não achei nenhuma receita chamada pudim");
+    // The search screen stays up with the mic closed, so it can be typed into.
+    expect(screenToken(res)).toBe("home");
+    expect(res.response.shouldEndSession).toBeUndefined();
+  });
+
+  it("opens the mic instead on a device without a screen", async () => {
+    recipes.searchRecipesByTitle.mockResolvedValue([]);
+    const res = await send(intent("StartRecipeIntent", { recipeName: "pudim" }), {}, false);
+    expect(speech(res)).toContain('Diga, por exemplo, "preparar cheesecake"');
     expect(res.response.shouldEndSession).toBe(false);
+  });
+
+  it("searches what was typed on screen, answering for touch", async () => {
+    recipes.searchRecipesByTitle.mockResolvedValue([match("r1", "Bobó de camarão"), match("r2", "Risoto de camarão")]);
+    const res = await send({ type: "Alexa.Presentation.APL.UserEvent", arguments: ["search", "camarão"] });
+    expect(recipes.searchRecipesByTitle).toHaveBeenCalledWith("camarão", 10);
+    expect(screenToken(res)).toBe("choose");
+    expect(speech(res)).toBe("Achei 2 receitas. Toque na que você quer.");
+    expect(res.response.shouldEndSession).toBeUndefined();
   });
 
   it("starts the only match on the ingredients screen, keeping the session without opening the mic", async () => {
@@ -249,7 +270,11 @@ describe("cooking", () => {
 
     expect(kitchen.advanceKitchenStep).toHaveBeenCalledWith("next");
     expect(speech(res)).toBe('Passo 2. Asse a base por 40 minutos. Esse passo leva 40 minutos. Diga "marcar timer" quando quiser.');
-    expect(screenData(res)).toMatchObject({ stepNumber: 2, totalSteps: 3, hasDuration: true, durationLabel: "40 min" });
+    expect(screenData(res)).toMatchObject({ stepNumber: 2, totalSteps: 3 });
+    expect(screenData(res).steps).toEqual([
+      { number: 2, text: "Asse a base por 40 minutos.", durationLabel: "40 min", current: true },
+      { number: 3, text: "Cubra com a calda.", durationLabel: "", current: false },
+    ]);
   });
 
   it("treats a fresh session with a recipe in the kitchen as cooking it", async () => {
@@ -285,7 +310,19 @@ describe("cooking", () => {
     const res = await send({ type: "LaunchRequest" });
     expect(speech(res)).toContain("Você estava no passo 3 de Cheesecake.");
     expect(res.sessionAttributes).toEqual({ phase: "resume" });
-    expect(res.response.shouldEndSession).toBe(false);
+    expect(screenData(res).resumeTitle).toBe("Cheesecake");
+    expect(res.response.shouldEndSession).toBeUndefined();
+  });
+
+  it("continues from the 'Continuar' button and shows the ingredients from theirs", async () => {
+    kitchen.getActiveKitchenRecipe.mockResolvedValue(inKitchen(2));
+    const resumed = await send({ type: "Alexa.Presentation.APL.UserEvent", arguments: ["continue"] }, { phase: "resume" });
+    expect(screenToken(resumed)).toBe("step");
+    expect(kitchen.advanceKitchenStep).not.toHaveBeenCalled();
+
+    const shown = await send({ type: "Alexa.Presentation.APL.UserEvent", arguments: ["ingredients"] }, { phase: "steps" });
+    expect(screenToken(shown)).toBe("ingredients");
+    expect(shown.sessionAttributes).toEqual({ phase: "ingredients" });
   });
 
   it("sends no screen to a device without one", async () => {
@@ -419,6 +456,71 @@ describe("substitutes", () => {
     substitution.suggestSubstitutes.mockRejectedValue(new Error("gateway down"));
     const res = await send(intent("SubstituteIntent", { ingredient: "cream cheese" }), { phase: "ingredients" });
     expect(speech(res)).toContain("Não consegui consultar os substitutos agora");
+  });
+});
+
+describe("muted", () => {
+  beforeEach(() => kitchen.getAlexaMuted.mockResolvedValue(true));
+
+  it("says nothing and marks the screen muted", async () => {
+    recipes.searchRecipesByTitle.mockResolvedValue([match("r1", "Cheesecake")]);
+    kitchen.getActiveKitchenRecipe.mockResolvedValue(inKitchen());
+    const res = await send(intent("StartRecipeIntent", { recipeName: "cheesecake" }));
+    expect(res.response.outputSpeech).toBeUndefined();
+    expect(screenToken(res)).toBe("ingredients");
+    expect(screenData(res).muted).toBe(true);
+  });
+
+  it("shows on screen what would only have been heard", async () => {
+    kitchen.getActiveKitchenRecipe.mockResolvedValue(inKitchen(0));
+    const res = await send(intent("QuantityIntent", { ingredient: "cream cheese" }), { phase: "steps" });
+    expect(res.response.outputSpeech).toBeUndefined();
+    expect(screenToken(res)).toBe("step");
+    expect(screenData(res)).toMatchObject({ hasCallout: true, callout: { lines: ["De cream cheese, são 400 gramas."] } });
+  });
+
+  it("never opens the mic, which would close the screen when it times out", async () => {
+    recipes.searchRecipesByTitle.mockResolvedValue([match("r1", "Bolo de fubá"), match("r2", "Bolo de milho")]);
+    const res = await send(intent("StartRecipeIntent", { recipeName: "bolo" }));
+    expect(screenToken(res)).toBe("choose");
+    expect(res.response.reprompt).toBeUndefined();
+    expect(res.response.shouldEndSession).toBeUndefined();
+  });
+
+  it("still speaks on a device without a screen, which has no button to unmute", async () => {
+    recipes.searchRecipesByTitle.mockResolvedValue([]);
+    const res = await send(intent("StartRecipeIntent", { recipeName: "pudim" }), {}, false);
+    expect(speech(res)).toContain("Não achei nenhuma receita chamada pudim");
+  });
+});
+
+describe("mute button", () => {
+  it("mutes and redraws the screen it's on, silently", async () => {
+    kitchen.getActiveKitchenRecipe.mockResolvedValue(inKitchen(0));
+    const res = await send({ type: "Alexa.Presentation.APL.UserEvent", arguments: ["mute"] }, { phase: "ingredients" });
+    expect(kitchen.setAlexaMuted).toHaveBeenCalledWith(true);
+    expect(res.response.outputSpeech).toBeUndefined();
+    expect(screenToken(res)).toBe("ingredients");
+    expect(screenData(res).muted).toBe(true);
+  });
+
+  it("unmutes with a word, and keeps the options on screen while choosing", async () => {
+    kitchen.getAlexaMuted.mockResolvedValue(true);
+    const attributes = {
+      phase: "choosing",
+      candidates: [
+        { id: "r1", title: "A", imagePath: null, hasSteps: true },
+        { id: "r2", title: "B", imagePath: "https://x/b.jpg", hasSteps: false },
+      ],
+    };
+    const res = await send({ type: "Alexa.Presentation.APL.UserEvent", arguments: ["mute"] }, attributes);
+    expect(kitchen.setAlexaMuted).toHaveBeenCalledWith(false);
+    expect(speech(res)).toBe("Voz ativada.");
+    expect(screenToken(res)).toBe("choose");
+    expect(screenData(res).options).toMatchObject([
+      { title: "A", number: 1 },
+      { title: "B", imageUrl: "https://x/b.jpg", note: "Sem modo de preparo", number: 2 },
+    ]);
   });
 });
 

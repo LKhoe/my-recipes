@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { user } from "@/lib/db/schema";
+import { recipeImage, user } from "@/lib/db/schema";
 import {
   countPendingReview,
   createRecipe,
@@ -322,9 +322,16 @@ describe("searchRecipesByTitle", () => {
     const { id: deleted } = await createRecipe(userId, { ...withSteps, title: `Torta ${dish} antiga` });
     await softDeleteRecipe(deleted, userId);
 
+    await db.insert(recipeImage).values([
+      { recipeId: lemon, path: `recipes/${lemon}/b.webp`, order: 1 },
+      { recipeId: lemon, path: `recipes/${lemon}/a.webp`, order: 0 },
+    ]);
+
     const results = await searchRecipesByTitle(`torta ${dish}`);
     expect(results.map((r) => r.id)).toEqual([exact, lemon, noMethod]);
     expect(results[2].hasSteps).toBe(false);
+    // Each recipe's own first photo (bug: a correlated subquery compared the image with itself).
+    expect(results.map((r) => r.imagePath)).toEqual([null, `recipes/${lemon}/a.webp`, null]);
 
     // One letter misheard, accents aside.
     const typo = await searchRecipesByTitle(`torta ${dish.replace("zimbro", "zinbro")} de limao`);

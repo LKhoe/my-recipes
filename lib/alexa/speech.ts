@@ -31,6 +31,11 @@ const ORDINALS: Record<string, number> = {
   terceira: 3, terceiro: 3, tres: 3,
   quarta: 4, quarto: 4, quatro: 4,
   quinta: 5, quinto: 5, cinco: 5,
+  sexta: 6, sexto: 6, seis: 6,
+  setima: 7, setimo: 7, sete: 7,
+  oitava: 8, oitavo: 8, oito: 8,
+  nona: 9, nono: 9, nove: 9,
+  decima: 10, decimo: 10, dez: 10,
   ultima: -1, ultimo: -1,
 };
 
@@ -188,7 +193,13 @@ export function ingredientsSpeech(title: string, hasSteps: boolean): string {
   return `Aqui estão os ingredientes de ${title}. Se faltar algum, pergunte o que usar no lugar. ${next}`;
 }
 
+// Past this many, reading every title takes longer than looking at the screen.
+const MAX_SPOKEN_OPTIONS = 5;
+
 export function chooseSpeech(titles: string[]): string {
+  if (titles.length > MAX_SPOKEN_OPTIONS) {
+    return `Achei ${titles.length} receitas. Diga o número da que você quer, ou toque na tela.`;
+  }
   const options = titles.map((t, i) => `${i + 1}: ${t}`).join("; ");
   return `Achei ${titles.length} receitas. ${options}. Qual delas?`;
 }

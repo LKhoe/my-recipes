@@ -176,6 +176,11 @@
             { "id": "3", "name": { "value": "terceira", "synonyms": ["terceiro", "a terceira", "o terceiro"] } },
             { "id": "4", "name": { "value": "quarta", "synonyms": ["quarto", "a quarta", "o quarto"] } },
             { "id": "5", "name": { "value": "quinta", "synonyms": ["quinto", "a quinta", "o quinto"] } },
+            { "id": "6", "name": { "value": "sexta", "synonyms": ["sexto", "a sexta", "o sexto"] } },
+            { "id": "7", "name": { "value": "sétima", "synonyms": ["sétimo", "a sétima", "o sétimo"] } },
+            { "id": "8", "name": { "value": "oitava", "synonyms": ["oitavo", "a oitava", "o oitavo"] } },
+            { "id": "9", "name": { "value": "nona", "synonyms": ["nono", "a nona", "o nono"] } },
+            { "id": "10", "name": { "value": "décima", "synonyms": ["décimo", "a décima", "o décimo"] } },
             { "id": "-1", "name": { "value": "última", "synonyms": ["último", "a última", "o último"] } }
           ]
         },

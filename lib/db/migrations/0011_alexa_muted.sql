@@ -1,0 +1,1 @@
+ALTER TABLE "kitchen_state" ADD COLUMN "alexa_muted" boolean DEFAULT false NOT NULL;

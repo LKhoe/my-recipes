@@ -8,7 +8,14 @@ import type { Response } from "ask-sdk-model";
 import { formatIngredientChoice, formatIngredientLine } from "@/lib/format";
 import { groupAlternatives } from "@/lib/ingredient-alternatives";
 import { groupIngredientSections } from "@/lib/ingredient-groups";
-import { advanceKitchenStep, getActiveKitchenRecipe, sendToKitchen, type ActiveKitchenRecipe } from "@/lib/services/kitchen";
+import {
+  advanceKitchenStep,
+  getActiveKitchenRecipe,
+  getAlexaMuted,
+  sendToKitchen,
+  setAlexaMuted,
+  type ActiveKitchenRecipe,
+} from "@/lib/services/kitchen";
 import { LLMLimitError } from "@/lib/services/llm";
 import { searchRecipesByTitle } from "@/lib/services/recipe";
 import { findRecipeIngredient, ingredientKey, suggestSubstitutes } from "@/lib/services/substitution";
@@ -45,14 +52,18 @@ import {
 } from "@/lib/alexa/timers";
 
 type Phase = "resume" | "choosing" | "ingredients" | "steps" | "done";
-type Candidate = { id: string; title: string };
+// Enough to draw the options again (the mute button redraws the screen it's on).
+type Candidate = { id: string; title: string; imagePath: string | null; hasSteps: boolean };
 type SessionState = { phase?: Phase; candidates?: Candidate[] };
 
-const MAX_CANDIDATES = 5;
+const MAX_CANDIDATES = 10;
 // Alexa drops a response after 8 s; the rest is left for the database and the network.
 export const SUBSTITUTION_WAIT_MS = 6000;
 
 const ASK_RECIPE = 'Qual receita você quer preparar? Diga, por exemplo, "preparar cheesecake".';
+// With a screen the mic stays closed (see askForRecipe), so the wake word is part of the answer.
+const ASK_RECIPE_ON_SCREEN = 'Qual receita você quer preparar? Diga "Alexa, preparar" e o nome, ou digite na tela.';
+const SEARCH_HINT = 'Ou diga: "Alexa, preparar cheesecake"';
 
 function session(h: HandlerInput): SessionState {
   return h.attributesManager.getSessionAttributes() as SessionState;
@@ -73,23 +84,43 @@ function hasScreen(h: HandlerInput): boolean {
   return Boolean(Alexa.getSupportedInterfaces(h.requestEnvelope)[APL_INTERFACE]);
 }
 
+/** The Echo's "Silenciar" (getAlexaMuted, read once per request). Only a screen can be muted. */
+function isMuted(h: HandlerInput): boolean {
+  return Boolean(h.attributesManager.getRequestAttributes().muted) && hasScreen(h);
+}
+
 type Reply = {
   speech?: string;
   screen?: RenderDirective;
   /** Opens the mic for an answer, with this reprompt. */
   listen?: string;
   end?: boolean;
+  /** When muted, a spoken-only answer is shown on this recipe's current screen instead. */
+  kitchen?: ActiveKitchenRecipe | null;
 };
 
 /**
  * Without `listen` or `end`, shouldEndSession stays unset: on a screen device the skill keeps the
  * display and the session with the mic closed, so "Alexa, próximo" comes back here.
+ *
+ * Muted, nothing is said and the mic never opens (it would time out and close the screen); what
+ * would only have been heard goes in a box on the screen.
  */
-function reply(h: HandlerInput, { speech, screen, listen, end }: Reply): Response {
+function reply(h: HandlerInput, { speech, screen, listen, end, kitchen }: Reply): Response {
   const builder = h.responseBuilder;
-  if (speech) builder.speak(ssmlEscape(speech));
-  if (screen && hasScreen(h)) builder.addDirective(screen);
-  if (listen) builder.reprompt(ssmlEscape(listen));
+  const muted = isMuted(h);
+  const phase = kitchen ? currentPhase(h, kitchen) : null;
+  let shown = screen;
+  if (muted && speech && !shown && kitchen && (phase === "ingredients" || phase === "steps")) {
+    shown = currentView(h, kitchen, { title: "Alexa", lines: [speech] });
+  }
+
+  if (speech && !muted) builder.speak(ssmlEscape(speech));
+  if (shown && hasScreen(h)) {
+    shown.datasources.data.muted = muted;
+    builder.addDirective(shown);
+  }
+  if (listen && !muted) builder.reprompt(ssmlEscape(listen));
   else if (end) builder.withShouldEndSession(true);
   return builder.getResponse();
 }
@@ -129,13 +160,10 @@ function ingredientsView(kitchen: ActiveKitchenRecipe, callout?: Callout | null)
 }
 
 function stepView(kitchen: ActiveKitchenRecipe, index: number, callout?: Callout | null): RenderDirective {
-  const step = kitchen.recipe.steps[index];
   return stepScreen({
     title: kitchen.recipe.title,
     stepIndex: index,
-    totalSteps: kitchen.recipe.steps.length,
-    text: step?.text ?? "",
-    durationMinutes: step?.durationMinutes,
+    steps: kitchen.recipe.steps,
     rows: ingredientRows(kitchen),
     callout,
   });
@@ -153,12 +181,17 @@ function speakStep(kitchen: ActiveKitchenRecipe, index: number): string {
   return stepSpeech(index, kitchen.recipe.steps.length, step.text, step.durationMinutes);
 }
 
-function askForRecipe(h: HandlerInput, speech = ASK_RECIPE): Response {
+/**
+ * The search screen. On a device with a screen the mic stays closed: an open mic times out after a
+ * few seconds and takes the session (and the screen) with it, before anyone could finish typing.
+ */
+function askForRecipe(h: HandlerInput, prefix = ""): Response {
   setSession(h, {});
+  const screen = hasScreen(h);
   return reply(h, {
-    speech,
-    screen: homeScreen("Qual receita você quer preparar?", 'Diga "preparar" e o nome da receita'),
-    listen: ASK_RECIPE,
+    speech: prefix + (screen ? ASK_RECIPE_ON_SCREEN : ASK_RECIPE),
+    screen: homeScreen({ subtitle: "Qual receita você quer preparar?", hint: SEARCH_HINT }),
+    listen: screen ? undefined : ASK_RECIPE,
   });
 }
 
@@ -169,7 +202,7 @@ function askForRecipe(h: HandlerInput, speech = ASK_RECIPE): Response {
 async function startRecipe(h: HandlerInput, recipeId: string): Promise<Response> {
   await sendToKitchen(recipeId, null);
   const kitchen = await getActiveKitchenRecipe();
-  if (!kitchen) return askForRecipe(h, "Não consegui abrir essa receita. " + ASK_RECIPE);
+  if (!kitchen) return askForRecipe(h, "Não consegui abrir essa receita. ");
 
   setSession(h, { phase: "ingredients" });
 
@@ -189,36 +222,65 @@ async function startRecipe(h: HandlerInput, recipeId: string): Promise<Response>
   });
 }
 
-async function searchAndStart(h: HandlerInput, rawQuery: string | null): Promise<Response> {
+/** `typed`: the search came from the on-screen keyboard, so the answer is a touch, not speech. */
+async function searchAndStart(h: HandlerInput, rawQuery: string | null, typed = false): Promise<Response> {
   const query = cleanRecipeQuery(rawQuery);
   if (!query) return askForRecipe(h);
 
   const matches = await searchRecipesByTitle(query, MAX_CANDIDATES);
   if (matches.length === 0) {
-    return askForRecipe(h, `Não achei nenhuma receita chamada ${query}. ${ASK_RECIPE}`);
+    return askForRecipe(h, `Não achei nenhuma receita chamada ${query}. `);
   }
 
   const exact = matches.find((m) => ingredientKey(m.title) === ingredientKey(query));
   if (exact || matches.length === 1) return startRecipe(h, (exact ?? matches[0]).id);
 
-  setSession(h, { phase: "choosing", candidates: matches.map((m) => ({ id: m.id, title: m.title })) });
+  const candidates = matches.map(({ id, title, imagePath, hasSteps }) => ({ id, title, imagePath, hasSteps }));
+  setSession(h, { phase: "choosing", candidates });
   return reply(h, {
-    speech: chooseSpeech(matches.map((m) => m.title)),
-    screen: chooserScreen(
-      matches.map((m) => ({
-        title: m.title,
-        imageUrl: absoluteImageUrl(m.imagePath),
-        note: m.hasSteps ? "" : "Sem modo de preparo",
-      })),
-    ),
-    listen: `Qual delas? Diga um número de 1 a ${matches.length}.`,
+    speech: typed
+      ? `Achei ${matches.length} receitas. Toque na que você quer.`
+      : chooseSpeech(matches.map((m) => m.title)),
+    screen: chooserView(candidates),
+    listen: typed ? undefined : `Qual delas? Diga um número de 1 a ${matches.length}.`,
   });
+}
+
+function chooserView(candidates: Candidate[]): RenderDirective {
+  return chooserScreen(
+    candidates.map((c) => ({
+      title: c.title,
+      imageUrl: absoluteImageUrl(c.imagePath),
+      note: c.hasSteps ? "" : "Sem modo de preparo",
+    })),
+  );
+}
+
+/** The screen the conversation is on, drawn again (after the mute button). */
+function screenFor(h: HandlerInput, kitchen: ActiveKitchenRecipe | null): RenderDirective {
+  const { phase, candidates } = session(h);
+  if (phase === "choosing" && candidates?.length) return chooserView(candidates);
+  if (kitchen && (phase === "ingredients" || phase === "steps")) return currentView(h, kitchen);
+  if (kitchen && phase === "done") return doneScreen(kitchen.recipe.title, recipeImage(kitchen));
+  return homeScreen({
+    subtitle: "Qual receita você quer preparar?",
+    hint: SEARCH_HINT,
+    resumeTitle: phase === "resume" && kitchen ? kitchen.recipe.title : null,
+  });
+}
+
+async function toggleMute(h: HandlerInput): Promise<Response> {
+  const muted = !h.attributesManager.getRequestAttributes().muted;
+  await setAlexaMuted(muted);
+  h.attributesManager.setRequestAttributes({ muted });
+  const kitchen = await getActiveKitchenRecipe();
+  return reply(h, { speech: muted ? undefined : "Voz ativada.", screen: screenFor(h, kitchen) });
 }
 
 async function selectCandidate(h: HandlerInput, choice: number | null): Promise<Response> {
   const { phase, candidates } = session(h);
   if (phase !== "choosing" || !candidates?.length) {
-    return askForRecipe(h, `Primeiro diga qual receita quer preparar. ${ASK_RECIPE}`);
+    return askForRecipe(h, "Primeiro escolha a receita. ");
   }
   const index = choice === -1 ? candidates.length : choice;
   if (!index || index < 1 || index > candidates.length) {
@@ -298,14 +360,18 @@ async function repeat(h: HandlerInput): Promise<Response> {
   const phase = currentPhase(h, kitchen);
   if (!kitchen || !phase) return askForRecipe(h);
   if (phase === "choosing") {
-    const titles = (session(h).candidates ?? []).map((c) => c.title);
-    return reply(h, { speech: chooseSpeech(titles), listen: `Diga um número de 1 a ${titles.length}.` });
+    const candidates = session(h).candidates ?? [];
+    return reply(h, {
+      speech: chooseSpeech(candidates.map((c) => c.title)),
+      screen: chooserView(candidates),
+      listen: `Diga um número de 1 a ${candidates.length}.`,
+    });
   }
   if (phase === "steps" && kitchen.recipe.steps.length > 0) {
     return reply(h, { speech: speakStep(kitchen, kitchen.currentStepIndex), screen: stepView(kitchen, kitchen.currentStepIndex) });
   }
   if (phase === "done") {
-    return reply(h, { speech: `${kitchen.recipe.title} já terminou. Bom apetite!` });
+    return reply(h, { speech: `${kitchen.recipe.title} já terminou. Bom apetite!`, kitchen });
   }
   return reply(h, {
     speech: ingredientsSpeech(kitchen.recipe.title, kitchen.recipe.steps.length > 0),
@@ -329,12 +395,12 @@ async function showIngredients(h: HandlerInput): Promise<Response> {
 async function answerQuantity(h: HandlerInput, name: string | null): Promise<Response> {
   const kitchen = await getActiveKitchenRecipe();
   if (!kitchen) return askForRecipe(h);
-  if (!name) return reply(h, { speech: "Qual ingrediente?", listen: 'Diga, por exemplo, "quanto vai de açúcar".' });
+  if (!name) return reply(h, { speech: "Qual ingrediente?", listen: 'Diga, por exemplo, "quanto vai de açúcar".', kitchen });
 
   const target = findRecipeIngredient(kitchen.recipe.ingredients, name);
-  if (!target) return reply(h, { speech: `Não encontrei ${name} em ${kitchen.recipe.title}.` });
+  if (!target) return reply(h, { speech: `Não encontrei ${name} em ${kitchen.recipe.title}.`, kitchen });
   const quantity = target.quantity !== null ? target.quantity * kitchen.factor : null;
-  return reply(h, { speech: quantitySentence(target.ingredientName, quantity, target.unit, target.note) });
+  return reply(h, { speech: quantitySentence(target.ingredientName, quantity, target.unit, target.note), kitchen });
 }
 
 type Outcome<T> = { kind: "ok"; value: T } | { kind: "timeout" } | { kind: "error"; error: unknown };
@@ -357,11 +423,12 @@ async function answerSubstitute(h: HandlerInput, name: string | null): Promise<R
     return reply(h, {
       speech: "Qual ingrediente está faltando?",
       listen: 'Diga, por exemplo, "o que posso usar no lugar de manteiga".',
+      kitchen,
     });
   }
 
   const { apiEndpoint, apiAccessToken } = h.requestEnvelope.context.System;
-  if (apiAccessToken) {
+  if (apiAccessToken && !isMuted(h)) {
     void sendProgressiveResponse(
       apiEndpoint,
       apiAccessToken,
@@ -376,7 +443,7 @@ async function answerSubstitute(h: HandlerInput, name: string | null): Promise<R
   const outcome = await withDeadline(pending, Math.max(SUBSTITUTION_WAIT_MS - (Date.now() - startedAt), 1000));
 
   if (outcome.kind === "timeout") {
-    return reply(h, { speech: "Ainda estou pensando. Pergunte de novo em alguns segundos." });
+    return reply(h, { speech: "Ainda estou pensando. Pergunte de novo em alguns segundos.", kitchen });
   }
   if (outcome.kind === "error" || !outcome.value) {
     const limit = outcome.kind === "error" && outcome.error instanceof LLMLimitError;
@@ -384,6 +451,7 @@ async function answerSubstitute(h: HandlerInput, name: string | null): Promise<R
       speech: limit
         ? "O limite de uso da inteligência artificial foi atingido. Tente mais tarde."
         : "Não consegui consultar os substitutos agora. Tente de novo daqui a pouco.",
+      kitchen,
     });
   }
 
@@ -410,7 +478,7 @@ async function setTimer(h: HandlerInput, durationSlot: string | null): Promise<R
   const minutes = parseIsoDurationMinutes(durationSlot) ?? step?.durationMinutes ?? null;
   if (!minutes) {
     const ask = 'Diga, por exemplo, "marcar timer de 10 minutos".';
-    return reply(h, { speech: `Esse passo não tem um tempo definido. ${ask}`, listen: ask });
+    return reply(h, { speech: `Esse passo não tem um tempo definido. ${ask}`, listen: ask, kitchen });
   }
 
   const stepLabel = step ? `passo ${kitchen.currentStepIndex + 1}` : null;
@@ -421,19 +489,24 @@ async function setTimer(h: HandlerInput, durationSlot: string | null): Promise<R
       ? `Acabou o tempo do ${stepLabel} de ${kitchen.recipe.title}.`
       : `Acabou o timer de ${kitchen.recipe.title}.`,
   };
-  return createTimerAndReply(h, spec);
+  return createTimerAndReply(h, spec, kitchen);
 }
 
 /** `askPermission: false` after the permission prompt was answered, so a refusal can't loop. */
-async function createTimerAndReply(h: HandlerInput, spec: TimerSpec, askPermission = true): Promise<Response> {
+async function createTimerAndReply(
+  h: HandlerInput,
+  spec: TimerSpec,
+  kitchen: ActiveKitchenRecipe | null,
+  askPermission = true,
+): Promise<Response> {
   const { apiEndpoint, apiAccessToken } = h.requestEnvelope.context.System;
   const result = apiAccessToken ? await createTimer(apiEndpoint, apiAccessToken, spec) : "no-permission";
   if (result === "no-permission" && askPermission) {
     // The voice permission prompt takes over the turn: no speech of our own, and Alexa ends it.
     return h.responseBuilder.addDirective(askForTimersPermission(spec)).withShouldEndSession(true).getResponse();
   }
-  if (result !== "created") return reply(h, { speech: "Não consegui marcar o timer agora. Tente de novo." });
-  return reply(h, { speech: `Timer de ${minutesForSpeech(spec.minutes)} marcado.` });
+  if (result !== "created") return reply(h, { speech: "Não consegui marcar o timer agora. Tente de novo.", kitchen });
+  return reply(h, { speech: `Timer de ${minutesForSpeech(spec.minutes)} marcado.`, kitchen });
 }
 
 // ---------------------------------------------------------------------------
@@ -460,18 +533,25 @@ const LaunchHandler: RequestHandler = {
   canHandle: (h) => Alexa.getRequestType(h.requestEnvelope) === "LaunchRequest",
   async handle(h) {
     const kitchen = await getActiveKitchenRecipe();
-    if (!kitchen || kitchen.recipe.steps.length === 0) return askForRecipe(h, `Olá! ${ASK_RECIPE}`);
+    if (!kitchen || kitchen.recipe.steps.length === 0) return askForRecipe(h, "Olá! ");
 
     setSession(h, { phase: "resume" });
     const where =
       kitchen.currentStepIndex > 0
         ? `Você estava no passo ${kitchen.currentStepIndex + 1} de ${kitchen.recipe.title}.`
         : `A receita na cozinha é ${kitchen.recipe.title}.`;
-    const ask = 'Diga "continuar", ou "preparar" e o nome de outra receita.';
+    const screen = hasScreen(h);
+    const ask = screen
+      ? 'Diga "Alexa, continuar", ou busque outra receita na tela.'
+      : 'Diga "continuar", ou "preparar" e o nome de outra receita.';
     return reply(h, {
       speech: `${where} ${ask}`,
-      screen: homeScreen(`Continuar ${kitchen.recipe.title}?`, ask),
-      listen: ask,
+      screen: homeScreen({
+        subtitle: "Qual receita você quer preparar?",
+        hint: SEARCH_HINT,
+        resumeTitle: kitchen.recipe.title,
+      }),
+      listen: screen ? undefined : ask,
     });
   },
 };
@@ -529,14 +609,16 @@ const PermissionResponseHandler: RequestHandler = {
   async handle(h) {
     const request = h.requestEnvelope.request as { token?: string; payload?: { status?: string } };
     const pending = parsePendingTimer(request.token);
+    const kitchen = await getActiveKitchenRecipe();
     if (request.payload?.status !== "ACCEPTED" || !pending) {
       return reply(h, {
         speech: "Tudo bem. Sem essa permissão eu não consigo marcar timers; dá para ativar no app Alexa, nas configurações da skill.",
+        kitchen,
       });
     }
-    const kitchen = await getActiveKitchenRecipe();
-    if (kitchen) h.responseBuilder.addDirective(currentView(h, kitchen));
-    return createTimerAndReply(h, pending, false);
+    // The permission prompt replaced the screen: bring the recipe back.
+    if (kitchen && !isMuted(h)) h.responseBuilder.addDirective(currentView(h, kitchen));
+    return createTimerAndReply(h, pending, kitchen, false);
   },
 };
 
@@ -556,6 +638,14 @@ const TouchHandler: RequestHandler = {
         return setTimer(h, null);
       case "substitute":
         return answerSubstitute(h, args[1] || null);
+      case "search":
+        return searchAndStart(h, args[1] || null, true);
+      case "continue":
+        return goNext(h);
+      case "ingredients":
+        return showIngredients(h);
+      case "mute":
+        return toggleMute(h);
       default:
         return h.responseBuilder.getResponse();
     }
@@ -575,7 +665,7 @@ const HelpHandler: RequestHandler = {
           : phase === "steps"
             ? 'Diga "próximo", "voltar" ou "repetir". Se o passo tiver tempo, diga "marcar timer". Também dá para perguntar "quanto vai de" um ingrediente.'
             : ASK_RECIPE;
-    return reply(h, { speech, listen: "O que você quer fazer?" });
+    return reply(h, { speech, listen: "O que você quer fazer?", kitchen });
   },
 };
 
@@ -613,6 +703,11 @@ const ErrorLogger: ErrorHandler = {
 
 export function buildSkill(skillId: string | undefined) {
   const builder = Alexa.SkillBuilders.custom()
+    .addRequestInterceptors({
+      async process(h) {
+        h.attributesManager.setRequestAttributes({ muted: await getAlexaMuted() });
+      },
+    })
     .addRequestHandlers(
       LaunchHandler,
       StartRecipeHandler,

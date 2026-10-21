@@ -1305,3 +1305,29 @@ its calls changed once the actual use was clear.
 - **Web**: ⇄ on each ingredient line (detail page and cook mode, signed-in members only), a popover
   scaled to the servings on screen. `lib/rate-limit.ts` now keys limiters by name; substitutions
   allow 30 per user per hour, imports keep 10.
+
+## 2026-10-21 — Alexa skill on the Echo Show 15: portrait screens, search box, mute
+
+From photos of the skill on the Echo Show 15, which is wall-mounted in portrait (1080×1920dp).
+
+- **Recipe photos were missing from the options**: `searchRecipesByTitle` read each recipe's first
+  photo with a correlated subquery, and drizzle writes `sql` columns unqualified, so
+  `"recipe_id" = "id"` compared the image with itself. Photos now come from a second query (as in
+  `listRecipes`). Uploads are WebP, which APL isn't documented to show, so the Echo gets them as
+  JPEG (`/api/uploads/...?format=jpeg`, converted with sharp, recipe photos only).
+- **Every option read "2."**: `${index}` inside a row is the row's own child index. The number is
+  in the datasource now.
+- **Screens work in both orientations**: type sized by the screen's shorter side (the portrait Show
+  15 got the small-screen sizes before); options as a vertical list; ingredients with the whole
+  photo on top (`best-fit`, never cropped) and the list below; steps as the current one highlighted
+  followed by the rest, with the ingredients beside them in landscape and behind a button in
+  portrait.
+- **Start screen with a search box** (`EditText`) and "Continuar". On a screen the mic no longer
+  opens there: an open mic times out after a few seconds and takes the session and the screen with
+  it, before anyone finishes typing. Voice still works with the wake word ("Alexa, preparar…").
+- **Up to ten options** (was five); only five or fewer are read aloud, past that the Echo says how
+  many and points at the screen. `ORDINAL` goes to "décima".
+- **"Silenciar" button** on every screen, saved in `kitchen_state.alexa_muted` (migration 0011) so
+  it holds across sessions. Muted, the skill doesn't speak, skips the progressive response and never
+  opens the mic (same screen-closing problem); spoken-only answers (quantities, timers, errors) go in
+  the callout box of the current screen. Only applies to devices with a screen.

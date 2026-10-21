@@ -47,6 +47,23 @@ export async function sendToKitchen(recipeId: string, servingsOverride: number |
     });
 }
 
+/** Whether the Echo answers on screen only ("Silenciar"). False until someone mutes it. */
+export async function getAlexaMuted(): Promise<boolean> {
+  const [row] = await db
+    .select({ alexaMuted: kitchenState.alexaMuted })
+    .from(kitchenState)
+    .where(eq(kitchenState.id, SINGLETON_KITCHEN_STATE_ID))
+    .limit(1);
+  return row?.alexaMuted ?? false;
+}
+
+export async function setAlexaMuted(muted: boolean): Promise<void> {
+  await db
+    .insert(kitchenState)
+    .values({ id: SINGLETON_KITCHEN_STATE_ID, alexaMuted: muted, updatedAt: new Date() })
+    .onConflictDoUpdate({ target: kitchenState.id, set: { alexaMuted: muted } });
+}
+
 /**
  * SPEC §4.1a: Cook Mode syncs its step position here — but only while the recipe being
  * cooked is still the active kitchen recipe, so a stale tab left open on an old recipe can't

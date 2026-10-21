@@ -5,6 +5,8 @@ vi.mock("@/lib/services/kitchen", () => ({
   getActiveKitchenRecipe: vi.fn().mockResolvedValue(null),
   sendToKitchen: vi.fn(),
   advanceKitchenStep: vi.fn(),
+  getAlexaMuted: vi.fn().mockResolvedValue(false),
+  setAlexaMuted: vi.fn(),
 }));
 
 const { POST } = await import("./route");
