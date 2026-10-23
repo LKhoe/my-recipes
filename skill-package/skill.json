@@ -33,7 +33,7 @@
       "custom": {
         "endpoint": {
           "uri": "https://SEU-DOMINIO/api/alexa/skill",
-          "sslCertificateType": "Trusted"
+          "sslCertificateType": "Wildcard"
         },
         "interfaces": [{ "type": "ALEXA_PRESENTATION_APL" }]
       }
