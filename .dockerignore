@@ -6,3 +6,4 @@ node_modules
 uploads
 *.tar.gz
 npm-debug.log*
+.env.bak-*
