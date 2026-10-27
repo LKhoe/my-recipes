@@ -5,3 +5,10 @@ export async function register() {
   const { startImportWorker } = await import("@/lib/services/import-queue");
   startImportWorker();
 }
+
+// Server errors go to LocalInfra's metrics: route pattern, error name and a scrubbed message only
+export async function onRequestError(err: unknown, _request: unknown, context: { routePath?: string }) {
+  if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  const { reportServerError } = await import("@/lib/metrics/forward");
+  await reportServerError(err, context);
+}

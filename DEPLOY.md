@@ -39,7 +39,7 @@ the image is built and the container runs on the Pi. Nothing is cloned on the Pi
 ```bash
 # 1. database + role + photo bucket/key on LocalInfra (no Redis), written straight into .env
 #    (local-dev values in .env? move them to .env.local first)
-DOCKER_CONTEXT=umbrel ../LocalInfra/scripts/provision-app.sh my_recipes . --no-redis --s3 --llm
+DOCKER_CONTEXT=umbrel ../LocalInfra/scripts/provision-app.sh my_recipes . --no-redis --s3 --llm --metrics
 
 # 2. fill in what the script lists as still local/placeholder: PORT=3001,
 #    BETTER_AUTH_URL / NEXT_PUBLIC_APP_URL (public URL), BETTER_AUTH_SECRET, Google,
