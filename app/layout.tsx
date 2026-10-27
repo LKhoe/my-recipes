@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { ViewTransitionsProvider } from "@/components/ViewTransitions";
+import { Metrics } from "@/components/Metrics";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -39,6 +40,7 @@ export default function RootLayout({
           {/* At the top: the bottom corner is the import progress card's (desktop), and the mobile tab bar and its pill (components/AppNav.tsx, ImportProgress.tsx) */}
           <Toaster position="top-right" mobileOffset={{ top: "calc(0.75rem + env(safe-area-inset-top))" }} />
         </ViewTransitionsProvider>
+        <Metrics />
       </body>
     </html>
   );

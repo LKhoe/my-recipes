@@ -22,6 +22,9 @@ services:
       - DATABASE_URL=${DATABASE_URL:?set DATABASE_URL in .env}
       - POSTGRES_HOST=${POSTGRES_HOST:-localinfra-postgres}
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      # Anonymous usage metrics (/api/metrics → localinfra-metrics); empty key = dropped
+      - METRICS_URL=${METRICS_URL:-http://localinfra-metrics:4100}
+      - METRICS_API_KEY=${METRICS_API_KEY:-}
       # Photos — LocalInfra S3 (Garage); this app's key can only read/write its own bucket
       - S3_ENDPOINT=${S3_ENDPOINT:-http://localinfra-s3:3900}
       - S3_REGION=${S3_REGION:-garage}
@@ -62,6 +65,7 @@ services:
       - localinfra_postgres
       - localinfra_s3
       - localinfra_llm
+      - localinfra_metrics
       # LocalInfra's Cloudflare tunnel reaches the app here: http://my-recipes:3000
       - localinfra_tunnel
     deploy:
@@ -84,6 +88,8 @@ networks:
   localinfra_s3:
     external: true
   localinfra_llm:
+    external: true
+  localinfra_metrics:
     external: true
   localinfra_tunnel:
     external: true
