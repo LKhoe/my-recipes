@@ -3,6 +3,9 @@
 # start it first, then provision this app once with
 #   LocalInfra/scripts/new-project.sh my_recipes --no-redis --s3
 # and copy the printed variables into this project's .env. See DEPLOY.md.
+# Fixed project name: without it Compose uses the folder name, and deploying from a worktree
+# (any other folder) collides with the live container_name.
+name: my-recipes
 services:
   my-recipes:
     container_name: my-recipes
