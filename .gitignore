@@ -34,3 +34,7 @@ next-env.d.ts
 # backups
 *.tar.gz
 .env.bak-*
+
+# every env variant (backups, .env.dev, ...); only the example is tracked
+.env*
+!.env.example
