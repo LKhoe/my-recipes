@@ -130,6 +130,7 @@ describe("fetchTranscriptText", () => {
       try {
         const youtube = await load();
         globalThis.captionThrottle!.nextAt = 0;
+        const start = Date.now();
         const originalFetch = global.fetch;
         const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 404, text: async () => "" });
         global.fetch = fetchMock;
@@ -139,7 +140,14 @@ describe("fetchTranscriptText", () => {
           const second = youtube.fetchTranscriptText("spacing-b");
           // The cache lookups are real database I/O, so wait for the first download to start.
           await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-          await vi.advanceTimersByTimeAsync(youtube.CAPTION_REQUEST_SPACING_MS - 1);
+          // ...and for the second lookup to reserve its slot, so the clock only moves once both are queued.
+          await vi.waitFor(() =>
+            expect(globalThis.captionThrottle!.nextAt).toBeGreaterThanOrEqual(start + 2 * youtube.CAPTION_REQUEST_SPACING_MS),
+          );
+          // vi.waitFor moves the fake clock while it polls, so measure from the second caller's slot
+          // (the end of the first) rather than from the start of the test.
+          const secondSlot = globalThis.captionThrottle!.nextAt - youtube.CAPTION_REQUEST_SPACING_MS;
+          await vi.advanceTimersByTimeAsync(secondSlot - Date.now() - 1);
           expect(fetchMock).toHaveBeenCalledTimes(1);
           await vi.advanceTimersByTimeAsync(1);
           await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));

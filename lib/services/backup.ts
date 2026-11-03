@@ -32,13 +32,16 @@ function collectPgDump(): Promise<Buffer> {
   });
 }
 
-function writeEntry(pack: tar.Pack, header: tar.Headers, content: Buffer): Promise<void> {
+// tar-stream 3.2 ships its own types but does not export the entry() argument type
+type HeaderArg = Partial<tar.Header> & Pick<tar.Header, 'name'>;
+
+function writeEntry(pack: tar.Pack, header: HeaderArg, content: Buffer): Promise<void> {
   return new Promise((resolve, reject) => {
     pack.entry(header, content, (err) => (err ? reject(err) : resolve()));
   });
 }
 
-function streamEntry(pack: tar.Pack, header: tar.Headers, source: Readable): Promise<void> {
+function streamEntry(pack: tar.Pack, header: HeaderArg, source: Readable): Promise<void> {
   return new Promise((resolve, reject) => {
     const entry = pack.entry(header, (err) => {
       if (err) reject(err);
