@@ -1,6 +1,6 @@
 # Deployment
 
-my-recipes follows LocalInfra's standard app deploy, [DEPLOYING-APPS.md](../LocalInfra/DEPLOYING-APPS.md)
+my-recipes follows local-infra's standard app deploy, [DEPLOYING-APPS.md](../local-infra/DEPLOYING-APPS.md)
 (same steps, same `deploy.sh` as every app). This page has the my-recipes specifics.
 
 My Recipes runs on the Raspberry Pi 4 (umbrelOS 2), next to yarg-aggregator. It is deployed
@@ -8,7 +8,7 @@ My Recipes runs on the Raspberry Pi 4 (umbrelOS 2), next to yarg-aggregator. It 
 the image is built and the container runs on the Pi. Nothing is cloned on the Pi.
 
 ```
-┌──────────── this repo ───────────────┐     ┌──────────── LocalInfra ──────────────────┐
+┌──────────── this repo ───────────────┐     ┌──────────── local-infra ──────────────────┐
 │  my-recipes (Next.js)  :3000         │     │                                          │
 │      ├── localinfra_postgres ────────┼────►│  localinfra-postgres  db/role my_recipes│
 │      ├── localinfra_s3 ──────────────┼────►│  localinfra-s3 (Garage) bucket my-recipes│
@@ -19,27 +19,27 @@ the image is built and the container runs on the Pi. Nothing is cloned on the Pi
   LAN: http://umbrel.local:3001
 ```
 
-- **Postgres** and **photo storage** (S3, on Garage) come from [LocalInfra](../LocalInfra) (start
+- **Postgres** and **photo storage** (S3, on Garage) come from [local-infra](../local-infra) (start
   it first). This app has no Redis and no volumes.
 - **Photos** are objects in the private `my-recipes` bucket, on the RAID 1 drive. The bucket is
   never exposed: `/api/uploads/...` streams them, recipe photos to anyone and cook photos to
   signed-in users only.
-- **Public access** goes through LocalInfra's Cloudflare tunnel (`localinfra-tunnel`) on `localinfra_tunnel`.
+- **Public access** goes through local-infra's Cloudflare tunnel (`localinfra-tunnel`) on `localinfra_tunnel`.
 - **Migrations** run on every container start (`docker-entrypoint.sh`: wait for Postgres →
   `scripts/migrate.mjs` → `scripts/seed.mjs` → start Next.js).
 
 ## Prerequisites (on the Mac)
 
-- Docker CLI and the `umbrel` context with SSH key login to the Pi (LocalInfra README, section 1).
-- LocalInfra running on the Pi: `DOCKER_CONTEXT=umbrel docker ps --filter name=localinfra`
+- Docker CLI and the `umbrel` context with SSH key login to the Pi (local-infra README, section 1).
+- local-infra running on the Pi: `DOCKER_CONTEXT=umbrel docker ps --filter name=localinfra`
   shows `localinfra-postgres` as healthy.
 
 ## First deploy
 
 ```bash
-# 1. database + role + photo bucket/key on LocalInfra (no Redis), written straight into .env
+# 1. database + role + photo bucket/key on local-infra (no Redis), written straight into .env
 #    (local-dev values in .env? move them to .env.local first)
-DOCKER_CONTEXT=umbrel ../LocalInfra/scripts/provision-app.sh my_recipes . --no-redis --s3 --llm --metrics
+DOCKER_CONTEXT=umbrel ../local-infra/scripts/provision-app.sh my_recipes . --no-redis --s3 --llm --metrics
 
 # 2. fill in what the script lists as still local/placeholder: PORT=3001,
 #    BETTER_AUTH_URL / NEXT_PUBLIC_APP_URL (public URL), BETTER_AUTH_SECRET, Google,
@@ -106,8 +106,8 @@ instead (README, "Local development"). Every key is in `.env.example` and the RE
 ./deploy.sh --rollback   # restart the image that was live before the last deploy
 ```
 
-`deploy.sh` is LocalInfra's shared one (`templates/app/deploy.sh`); it keeps the outgoing image
-as `my-recipes:previous` for `--rollback`. Only this container is rebuilt; LocalInfra keeps
+`deploy.sh` is local-infra's shared one (`templates/app/deploy.sh`); it keeps the outgoing image
+as `my-recipes:previous` for `--rollback`. Only this container is rebuilt; local-infra keeps
 running. Set `DEPLOY_CONTEXT=...` to target another Docker context.
 
 ## Common commands
@@ -132,7 +132,7 @@ DOCKER_CONTEXT=umbrel docker exec localinfra-postgres pg_dump -U postgres -Fc my
 
 ## Backups
 
-- **Database**: LocalInfra dumps `my_recipes` to the external drive every night (LocalInfra
+- **Database**: local-infra dumps `my_recipes` to the external drive every night (local-infra
   README, section 5). Nothing to do here.
 - **Photos**: stored by Garage on the external RAID 1 drive, with no separate backup (a
   deliberate choice: RAID 1 covers a dead disk, not deletions or losing the Pi). **Settings →
@@ -140,13 +140,13 @@ DOCKER_CONTEXT=umbrel docker exec localinfra-postgres pg_dump -U postgres -Fc my
 
 ## Troubleshooting
 
-- **`Database connection failed after 30 attempts`**: LocalInfra isn't running, or the container
+- **`Database connection failed after 30 attempts`**: local-infra isn't running, or the container
   isn't on `localinfra_postgres`.
 - **`password authentication failed for user "my_recipes"`**: `DATABASE_URL` doesn't match the
   role; issue new credentials with `provision-app.sh my_recipes . --no-redis --s3 --rotate`.
 - **`Bind for 0.0.0.0:3001 failed: port is already allocated`**: pick another `PORT` in `.env`.
 - **Backup download fails with `server version mismatch`**: the image's `pg_dump` is older than
-  the server; build with `PG_MAJOR` matching LocalInfra's `PG_VERSION`.
+  the server; build with `PG_MAJOR` matching local-infra's `PG_VERSION`.
 - **Sign-in redirects to the wrong host**: `BETTER_AUTH_URL` / `NEXT_PUBLIC_APP_URL` must be the
   public URL; rebuild after changing `NEXT_PUBLIC_APP_URL`.
 - **Health check fails / photos 404 after a deploy**: the S3 credentials in `.env` don't match

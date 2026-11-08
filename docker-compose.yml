@@ -1,7 +1,7 @@
 # My Recipes — app only.
-# Postgres, photo storage (S3, Garage) and the LLM gateway come from the LocalInfra project (../LocalInfra):
+# Postgres, photo storage (S3, Garage) and the LLM gateway come from the local-infra project (../local-infra):
 # start it first, then provision this app once with
-#   LocalInfra/scripts/new-project.sh my_recipes --no-redis --s3
+#   local-infra/scripts/new-project.sh my_recipes --no-redis --s3
 # and copy the printed variables into this project's .env. See DEPLOY.md.
 # Fixed project name: without it Compose uses the folder name, and deploying from a worktree
 # (any other folder) collides with the live container_name.
@@ -20,15 +20,15 @@ services:
       # yarg-aggregator already owns 3000 on the Pi
       - "${PORT:-3001}:3000"
     environment:
-      # Database — LocalInfra Postgres; DATABASE_URL carries this app's own role
-      # (create it with: LocalInfra/scripts/new-project.sh my_recipes --no-redis)
+      # Database — local-infra Postgres; DATABASE_URL carries this app's own role
+      # (create it with: local-infra/scripts/new-project.sh my_recipes --no-redis)
       - DATABASE_URL=${DATABASE_URL:?set DATABASE_URL in .env}
       - POSTGRES_HOST=${POSTGRES_HOST:-localinfra-postgres}
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
       # Anonymous usage metrics (/api/metrics → localinfra-metrics); empty key = dropped
       - METRICS_URL=${METRICS_URL:-http://localinfra-metrics:4100}
       - METRICS_API_KEY=${METRICS_API_KEY:-}
-      # Photos — LocalInfra S3 (Garage); this app's key can only read/write its own bucket
+      # Photos — local-infra S3 (Garage); this app's key can only read/write its own bucket
       - S3_ENDPOINT=${S3_ENDPOINT:-http://localinfra-s3:3900}
       - S3_REGION=${S3_REGION:-garage}
       - S3_BUCKET=${S3_BUCKET:-my-recipes}
@@ -45,7 +45,7 @@ services:
       # Google OAuth
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      # LLM import fallback — LocalInfra's LLM gateway (provision-app.sh --llm)
+      # LLM import fallback — local-infra's LLM gateway (provision-app.sh --llm)
       - LLM_BASE_URL=${LLM_BASE_URL:-http://localinfra-llm:4000/v1}
       - LLM_API_KEY=${LLM_API_KEY}
       # YouTube import
@@ -69,7 +69,7 @@ services:
       - localinfra_s3
       - localinfra_llm
       - localinfra_metrics
-      # LocalInfra's Cloudflare tunnel reaches the app here: http://my-recipes:3000
+      # local-infra's Cloudflare tunnel reaches the app here: http://my-recipes:3000
       - localinfra_tunnel
     deploy:
       resources:
@@ -85,7 +85,7 @@ services:
         max-file: "3"
 
 networks:
-  # Created by the LocalInfra project (start it first)
+  # Created by the local-infra project (start it first)
   localinfra_postgres:
     external: true
   localinfra_s3:

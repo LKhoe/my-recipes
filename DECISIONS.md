@@ -34,7 +34,7 @@ Choices made where SPEC.md was silent, with rationale. Newest last.
 
 - **`InviteCode.createdByUserId` is nullable.** SPEC §5 doesn't say NOT NULL, and the first invite
   code has no member to have created it (chicken-and-egg before any user exists). Bootstrap it via
-  `npx tsx lib/db/create-invite.ts` (since replaced by `npm run db:invite`, see "Deploy on LocalInfra"); every invite minted through the app
+  `npx tsx lib/db/create-invite.ts` (since replaced by `npm run db:invite`, see "Deploy on local-infra"); every invite minted through the app
   (`POST /api/invite/generate`, authenticated) sets a real creator.
 
 - **Password reset email delivery.** SPEC §2 doesn't list a transactional email provider anywhere
@@ -889,16 +889,16 @@ below.
   instance ever unmounts and its `remaining`/`running` state (and the running `setInterval`) survive
   navigating away and back, matching the Phase 2 decision's original intent.
 
-## Deploy on LocalInfra (Raspberry Pi)
+## Deploy on local-infra (Raspberry Pi)
 
-- **Postgres moves to LocalInfra.** The app no longer ships its own `postgres` service: it joins the
+- **Postgres moves to local-infra.** The app no longer ships its own `postgres` service: it joins the
   external `localinfra_postgres` network and uses its own role/database (`my_recipes`, from
-  `LocalInfra/scripts/new-project.sh my_recipes --no-redis`), matching how yarg-aggregator runs on
+  `local-infra/scripts/new-project.sh my_recipes --no-redis`), matching how yarg-aggregator runs on
   the same Pi. The project name is `my_recipes` because `new-project.sh` only accepts
   `[a-z][a-z0-9_]`. No Redis: §2/§8's "no job queue" still holds.
 
 - **`pg_dump` client is now v17** (`PG_MAJOR` build arg), replacing the Phase 0 "Postgres 16"
-  decision — LocalInfra runs Postgres 17, and an older `pg_dump` refuses to dump a newer server.
+  decision — local-infra runs Postgres 17, and an older `pg_dump` refuses to dump a newer server.
   `unaccent` (migration 0002) needs no change: it's a trusted extension since PG13, so the
   database owner can create it without superuser.
 
@@ -908,7 +908,7 @@ below.
   recreated the container from the same image).
 
 - **`deploy.sh` deploys through the `umbrel` Docker context** instead of SSH + `git pull` on a
-  clone, the same model LocalInfra and yarg use; the `DEPLOY_HOST/USER/PORT` variables are gone.
+  clone, the same model local-infra and yarg use; the `DEPLOY_HOST/USER/PORT` variables are gone.
 
 - **`TZ=America/Sao_Paulo` in the container.** The meal plan computes "this week" on the server
   with `new Date()`; in a UTC container, Sunday after 21:00 BRT already showed next week. Node
@@ -923,10 +923,10 @@ below.
   which isn't in the production image; the `.mjs` replaces it for both local dev
   (`npm run db:invite`) and the container.
 
-- **Photos move to S3 (Garage on LocalInfra), superseding SPEC §4.8's "no external object
+- **Photos move to S3 (Garage on local-infra), superseding SPEC §4.8's "no external object
   storage" and the uploads volume.** Garage was picked over SeaweedFS, RustFS and a MinIO fork
   (MinIO's community edition was archived in 2026): lightest footprint on the Pi, official arm64
-  releases, and per-app isolation that matches LocalInfra's model — one key per project, granted
+  releases, and per-app isolation that matches local-infra's model — one key per project, granted
   read/write on its own bucket only (verified: AccessDenied on other buckets, can't create or
   delete buckets, lists only its own). Still self-hosted, so §4.8's intent (no third-party
   cloud) holds. The bucket is private: `/api/uploads/...` keeps streaming photos to signed-in
@@ -954,13 +954,13 @@ below.
   runs `npm ci --omit=dev` from the lockfile, so every copy agrees. Found while testing the S3
   switch in the real image; unrelated to S3 itself.
 
-- **Deploy follows LocalInfra's standard (`LocalInfra/DEPLOYING-APPS.md`).** `deploy.sh` is now
-  the shared `LocalInfra/templates/app/deploy.sh`, identical in every app: it reads the service,
+- **Deploy follows local-infra's standard (`local-infra/DEPLOYING-APPS.md`).** `deploy.sh` is now
+  the shared `local-infra/templates/app/deploy.sh`, identical in every app: it reads the service,
   container and image from `docker-compose.yml`, checks the external networks before the build,
   and warns when `.env` still has local values. Its default no longer bumps, commits and pushes:
   a plain `./deploy.sh` deploys the working tree, and `--release` does the bump + commit + push
   (the old default) — deploying should never publish to GitHub as a side effect. First-time
-  setup uses `LocalInfra/scripts/provision-app.sh`, which writes the credentials into `.env`.
+  setup uses `local-infra/scripts/provision-app.sh`, which writes the credentials into `.env`.
 
 ## 2026-10-15 — Fix: YouTube transcripts were never fetched
 
@@ -1082,9 +1082,9 @@ Multi-part recipes lost their structure on import: a risotto with "CALDO: 1 cebo
   (they join the section above). "Adicionar seção" starts a new one at the end. There's no
   drag-to-move between sections; delete and re-add a row to move it.
 
-## LLM calls through LocalInfra's gateway
+## LLM calls through local-infra's gateway
 
-- **No OpenRouter key in the app any more.** The import fallback calls LocalInfra's LLM gateway
+- **No OpenRouter key in the app any more.** The import fallback calls local-infra's LLM gateway
   (`LLM_BASE_URL`, `LLM_API_KEY` from `provision-app.sh --llm`), which holds the only OpenRouter
   key, picks the model and enforces this app's limits on paid calls (monthly budget, calls per day).
   The old default `google/gemini-3.1-flash-lite-20260507` had also left OpenRouter's catalog.
@@ -1159,7 +1159,7 @@ Multi-part recipes lost their structure on import: a risotto with "CALDO: 1 cebo
   An import takes 10-60 s (minutes on the free tier's fallback model) and a playlist can have
   dozens of videos, so it can't run in the request or in the browser: the user has to be able to
   leave. A queue is needed; the question was which. A table (`import_batch`, `import_batch_item`)
-  won over LocalInfra's Redis + BullMQ because: (1) the popup needs per-user progress, outcome and
+  won over local-infra's Redis + BullMQ because: (1) the popup needs per-user progress, outcome and
   the created recipe, which has to be in Postgres anyway; with BullMQ it would live twice and
   drift; (2) imports run one at a time (the gateway limits paid calls, and the free fallback is a
   single local model), so BullMQ's concurrency, retries and scheduling would go unused; (3) it
@@ -1170,7 +1170,7 @@ Multi-part recipes lost their structure on import: a risotto with "CALDO: 1 cebo
   an `IN (subquery)` was re-run per row and claimed several items at once, caught by the test),
   and on start puts items left `running` by a restart back to `pending`. Verified by stopping the
   dev server mid-import: the queue finished after restart. If imports ever need several workers
-  or another process, BullMQ on LocalInfra's Redis is the next step.
+  or another process, BullMQ on local-infra's Redis is the next step.
 - **Playlist details**: videos come from the Data API (`playlistItems`, 50 per page, up to 200),
   so playlist import needs `YOUTUBE_API_KEY`. Deleted/private videos are skipped; videos that are
   already a recipe (any member's, by video id) or already queued start unchecked. Mixes (`RD…`)

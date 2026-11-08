@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { LLM_TIER_LABELS, LLM_TIERS, type LLMTier } from "@/lib/llm-tiers";
 import { cn } from "@/lib/utils";
 
-/** Which tier of LocalInfra's LLM gateway reads the page or video (lib/llm-tiers.ts). */
+/** Which tier of local-infra's LLM gateway reads the page or video (lib/llm-tiers.ts). */
 export function TierPicker({
   label,
   value,

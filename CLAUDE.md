@@ -16,7 +16,7 @@ npm run photos:upload      # push local photos to the S3 bucket
 ./deploy.sh                # deploy to the Pi (Docker context "umbrel")
 ```
 
-Local Postgres and S3 are LocalInfra on Docker Desktop (`../LocalInfra`). Always pass
+Local Postgres and S3 are local-infra on Docker Desktop (`../local-infra`). Always pass
 `DOCKER_CONTEXT` explicitly (`desktop-linux` = Docker Desktop, `umbrel` = the Pi).
 
 ## Architecture
@@ -32,7 +32,7 @@ Local Postgres and S3 are LocalInfra on Docker Desktop (`../LocalInfra`). Always
   `pending_invite_code` cookie and the `user.create.before` hook is the real gate (see DECISIONS.md).
 - Photos live in the private S3 bucket `my-recipes`; `/api/uploads/...` streams them. Recipe photos
   are public, cook photos need a signed-in user. The bucket is never exposed.
-- LLM calls go through LocalInfra's gateway (`lib/services/llm.ts`, tiers in `lib/llm-tiers.ts`),
+- LLM calls go through local-infra's gateway (`lib/services/llm.ts`, tiers in `lib/llm-tiers.ts`),
   never straight to a provider; handle `429`.
 - Container start runs `docker-entrypoint.sh`: wait for Postgres → migrate → seed → start.
 

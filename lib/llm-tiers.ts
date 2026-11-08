@@ -1,4 +1,4 @@
-// The tiers of LocalInfra's LLM gateway, shared by the import box and the server. The gateway picks
+// The tiers of local-infra's LLM gateway, shared by the import box and the server. The gateway picks
 // the model for each: simple = free models (a small local model when they fail), medium = cheap
 // paid models, hard = the best, pricier ones. Paid tiers count against this app's limits there.
 export const LLM_TIERS = ["simple", "medium", "hard"] as const;

@@ -36,7 +36,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # postgresql-client for the backup export route (SPEC §4.9), which spawns pg_dump directly. Its
-# major version must be >= the server's (LocalInfra's PG_VERSION, currently 17) or pg_dump
+# major version must be >= the server's (local-infra's PG_VERSION, currently 17) or pg_dump
 # refuses to run with "server version mismatch".
 ARG PG_MAJOR=17
 RUN apk add --no-cache postgresql${PG_MAJOR}-client
