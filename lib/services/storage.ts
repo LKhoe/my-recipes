@@ -8,7 +8,7 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 
-// Recipe photos live in an S3 bucket on LocalInfra's Garage (see DEPLOY.md), keyed by the same
+// Recipe photos live in an S3 bucket on local-infra's Garage (see DEPLOY.md), keyed by the same
 // relative path the DB stores in `recipe_image.path` / `cook_photo.path`, e.g.
 // `recipes/{recipeId}/{uuid}.webp`. The bucket is never public: /api/uploads streams objects to
 // signed-in users.

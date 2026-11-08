@@ -6,11 +6,11 @@ Raspberry Pi is in `DEPLOY.md`.
 
 ## Local development
 
-Postgres and photo storage (S3, Garage) come from [LocalInfra](../LocalInfra) — the same shared
+Postgres and photo storage (S3, Garage) come from [local-infra](../local-infra) — the same shared
 stack that runs on the Pi — running on Docker Desktop.
 
 ```bash
-# 1. LocalInfra on Docker Desktop (from ../LocalInfra; see its README section 7)
+# 1. local-infra on Docker Desktop (from ../local-infra; see its README section 7)
 BACKUP_DIR=./backups-local S3_DATA_DIR=./s3-local DOCKER_CONTEXT=desktop-linux docker compose up -d --build
 DOCKER_CONTEXT=desktop-linux scripts/new-project.sh my_recipes --no-redis --s3   # prints DATABASE_URL + S3_*
 
@@ -44,7 +44,7 @@ redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`). Email/password work
 
 | Variable | Required | Notes |
 |---|---|---|
-| `DATABASE_URL` | yes | written by LocalInfra's `provision-app.sh my_recipes . --no-redis --s3` |
+| `DATABASE_URL` | yes | written by local-infra's `provision-app.sh my_recipes . --no-redis --s3` |
 | `POSTGRES_HOST` / `POSTGRES_PORT` | docker | `localinfra-postgres` / `5432` — the entrypoint waits for it |
 | `S3_ENDPOINT` / `S3_REGION` / `S3_BUCKET` | yes | photo bucket, written by `provision-app.sh ... --s3` |
 | `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | yes | that bucket's key (read/write on it only) |
@@ -54,7 +54,7 @@ redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`). Email/password work
 | `PORT` | no | Host port on the Pi, default `3001` (yarg owns `3000`) |
 | `TZ` | no | Server timezone, default `America/Sao_Paulo` — decides "today" for the meal plan |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | Enables Google sign-in |
-| `LLM_BASE_URL` / `LLM_API_KEY` | no (Phase 1+) | LLM import fallback, through LocalInfra's LLM gateway (`provision-app.sh ... --llm`) |
+| `LLM_BASE_URL` / `LLM_API_KEY` | no (Phase 1+) | LLM import fallback, through local-infra's LLM gateway (`provision-app.sh ... --llm`) |
 | `YOUTUBE_API_KEY` | no (Phase 1+) | YouTube description fetch and playlist listing (playlist import needs it); transcripts need no key |
 | `ALEXA_API_TOKEN` | no (Phase 4+) | Shared-secret bearer token for `/api/alexa/*` |
 | `ALEXA_SKILL_ID` | no | The Alexa skill's id; `/api/alexa/skill` refuses requests without it (see "Alexa skill") |
@@ -69,9 +69,9 @@ redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`). Email/password work
 
 ## Deployment
 
-Runs on the Raspberry Pi (umbrelOS) next to yarg-aggregator, on LocalInfra's shared Postgres and
-S3 (Garage), deployed from the Mac through the `umbrel` Docker context, following LocalInfra's
-standard app deploy (`../LocalInfra/DEPLOYING-APPS.md`). Specifics: **`DEPLOY.md`**.
+Runs on the Raspberry Pi (umbrelOS) next to yarg-aggregator, on local-infra's shared Postgres and
+S3 (Garage), deployed from the Mac through the `umbrel` Docker context, following local-infra's
+standard app deploy (`../local-infra/DEPLOYING-APPS.md`). Specifics: **`DEPLOY.md`**.
 
 ```bash
 ./deploy.sh              # build on the Pi, restart, wait for healthy
@@ -96,11 +96,11 @@ expire, that could be replayed to hijack a signed-in session). Store archives th
 store a password vault export: not in a shared/public Drive folder, not emailed unencrypted.
 
 **Requires `pg_dump` on the app host with a major version >= the Postgres server's** (17, on
-LocalInfra) — an older client refuses to dump and the route returns a 500. The Docker image
+local-infra) — an older client refuses to dump and the route returns a 500. The Docker image
 installs `postgresql17-client` (`PG_MAJOR` build arg) for exactly this reason; for local dev
 outside Docker, make sure whatever `pg_dump` is on your `PATH` is v17+.
 
-**Unattended backups don't use this route** (it needs a logged-in session). On the Pi, LocalInfra
+**Unattended backups don't use this route** (it needs a logged-in session). On the Pi, local-infra
 dumps the `my_recipes` database to the external drive every night; the photos live in the
 `my-recipes` bucket on the same RAID 1 drive and aren't backed up separately (see `DEPLOY.md`).
 

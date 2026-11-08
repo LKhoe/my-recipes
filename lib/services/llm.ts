@@ -3,7 +3,7 @@ import { normalizeGroupLabel } from "@/lib/ingredient-groups";
 import { DEFAULT_LLM_TIER, type LLMTier } from "@/lib/llm-tiers";
 import type { RecipeDraft } from "@/types";
 
-// LocalInfra's LLM gateway picks the model: the app only asks for a tier (lib/llm-tiers.ts),
+// local-infra's LLM gateway picks the model: the app only asks for a tier (lib/llm-tiers.ts),
 // which the user chooses on import.
 
 export class LLMExtractionError extends Error {}
@@ -160,7 +160,7 @@ function stripJsonFences(content: string): string {
 }
 
 /**
- * One chat completion through LocalInfra's gateway, answered as a JSON object (parsed, not yet
+ * One chat completion through local-infra's gateway, answered as a JSON object (parsed, not yet
  * validated). Maps the gateway's failures to LLMExtractionError / LLMLimitError.
  */
 export async function requestLLMJson(opts: {

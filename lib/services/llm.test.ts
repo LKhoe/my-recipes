@@ -251,7 +251,7 @@ describe("extractRecipeWithLLM", () => {
     ).rejects.toThrow(LLMExtractionError);
   });
 
-  it("calls the LocalInfra gateway with its key, on the simple tier unless told otherwise", async () => {
+  it("calls the local-infra gateway with its key, on the simple tier unless told otherwise", async () => {
     const fetchMock = vi.fn().mockResolvedValue(mockLLMResponse({ recipeFound: false }));
     global.fetch = fetchMock as unknown as typeof fetch;
 
