@@ -48,6 +48,9 @@ export const auth = betterAuth({
   session: {
     expiresIn: 60 * 60 * 24 * 30, // 30 days
     updateAge: 60 * 60 * 24, // refresh daily
+    // Signed cookie with the session, so most requests skip the DB lookup. Trade-off: a revoked
+    // session (sign-out elsewhere, deleted user) can keep working for up to maxAge, 5 minutes.
+    cookieCache: { enabled: true, maxAge: 5 * 60 },
   },
 
   account: {

@@ -1384,3 +1384,10 @@ From photos of the skill on the Echo Show 15, which is wall-mounted in portrait 
   - *Alexa* doesn't use the web login: the skill endpoint is protected by the skill-id/signature
     check and the `/api/alexa/*` helpers by `ALEXA_API_TOKEN`; there's no account-linking flow, so
     nothing there depended on passwords.
+
+- **S1: client IP.** `advanced.ipAddress.ipAddressHeaders: ["cf-connecting-ip"]`, so Better Auth's
+  rate limiter uses the header Cloudflare's tunnel sets instead of a spoofable `X-Forwarded-For`.
+  Anyone who could reach the container directly could forge it, which is why the host port is
+  loopback-only (S10).
+- **O5: `session.cookieCache` on (5 min).** Fewer DB reads per request; revoking a session
+  (sign-out on another device, removing a user) can take up to 5 minutes to take effect.
