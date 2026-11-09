@@ -82,7 +82,9 @@ S3_ACCESS_KEY_ID=<from .env> S3_SECRET_ACCESS_KEY=<from .env> \
 ```
 
 From a **Settings → Baixar backup** archive: `pg_restore` its `db.dump` as above and run the
-same script on its `uploads/` folder.
+same script on its `uploads/` folder. The archive has no sessions, password hashes or OAuth tokens
+(the `session`, `account` and `verification` tables are restored empty), so every member signs in
+with Google again; the account is re-linked to the existing user by email.
 
 ## Configuration (`.env`)
 

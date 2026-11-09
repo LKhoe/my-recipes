@@ -89,11 +89,15 @@ migrations, and re-runs the (idempotent) category seed on every start. Health ch
 containing `db.dump` (a `pg_dump -Fc` custom-format dump) and every photo in the bucket under
 `uploads/`.
 
-**⚠️ Treat every backup archive as a secret.** `db.dump` is a full, unfiltered dump of the
-database — it includes the `account` table (password hashes, and OAuth access/refresh tokens for
-anyone who signed in with Google) and the `session` table (live session tokens, valid until they
-expire, that could be replayed to hijack a signed-in session). Store archives the same way you'd
-store a password vault export: not in a shared/public Drive folder, not emailed unencrypted.
+**What the dump leaves out.** Any circle member can download it, so the *data* of the three Better
+Auth tables that hold credentials is excluded (`pg_dump --exclude-table-data`): `session` (live
+session tokens), `account` (password hashes, Google access/refresh/id tokens) and `verification`
+(one-time tokens). Their table definitions stay, so a restore works. Everything else is in there
+(recipes, notes, ratings, member names and emails, invite codes), so still keep archives out of
+public folders. After a restore nobody is signed in; each member signs in with Google again and
+Better Auth re-creates their `account` row by linking it to the existing user with the same email.
+`pg_dump` gets its connection through `PG*` environment variables, not argv, so the password isn't
+visible in the process list.
 
 **Requires `pg_dump` on the app host with a major version >= the Postgres server's** (17, on
 local-infra) — an older client refuses to dump and the route returns a 500. The Docker image
@@ -111,6 +115,8 @@ tar xzf my-recipes-backup-2026-01-01.tar.gz
 pg_restore -h <host> -U <user> -d <target-db> db.dump   # target db must already exist and be empty
 npm run photos:upload -- uploads                         # copy the photos back into the bucket
 ```
+
+Then every member signs in with Google again (sessions and linked accounts are not in the archive).
 
 Verified end-to-end during development: restored a real export into a scratch database and
 confirmed all rows came back intact.

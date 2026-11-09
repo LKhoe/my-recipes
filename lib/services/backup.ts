@@ -10,6 +10,37 @@ import { getObjectStream, listObjects } from "@/lib/services/storage";
 // (typically small for this app's data) is buffered in memory once, while each photo streams
 // straight out of S3 (its size comes from the bucket listing, no buffering needed). Neither
 // touches a temp file on disk, matching the spec's "no temp files" intent.
+/**
+ * Better Auth tables whose rows are credentials: live session tokens, password hashes and OAuth
+ * access/refresh/id tokens, one-time verification tokens. Any circle member can download a backup
+ * (SPEC §4.9), so their DATA never goes into it; the table definitions stay so a restore works.
+ * After a restore people sign in with Google again (Better Auth re-creates the `account` row by
+ * linking to the existing user with the same email, see DECISIONS.md "S8").
+ */
+export const BACKUP_EXCLUDED_TABLE_DATA = ["public.session", "public.account", "public.verification"] as const;
+
+/**
+ * Connection settings for the child as PG* variables, so the password never shows up in `ps`
+ * (argv is visible to every process in the container). Pure, for tests.
+ */
+export function pgEnvFromUrl(databaseUrl: string): Record<string, string> {
+  const url = new URL(databaseUrl);
+  const env: Record<string, string> = {};
+  if (url.hostname) env.PGHOST = decodeURIComponent(url.hostname.replace(/^\[|\]$/g, ""));
+  if (url.port) env.PGPORT = url.port;
+  if (url.username) env.PGUSER = decodeURIComponent(url.username);
+  if (url.password) env.PGPASSWORD = decodeURIComponent(url.password);
+  const database = decodeURIComponent(url.pathname.replace(/^\//, ""));
+  if (database) env.PGDATABASE = database;
+  const sslmode = url.searchParams.get("sslmode");
+  if (sslmode) env.PGSSLMODE = sslmode;
+  return env;
+}
+
+export function pgDumpArgs(): string[] {
+  return ["-Fc", ...BACKUP_EXCLUDED_TABLE_DATA.map((t) => `--exclude-table-data=${t}`)];
+}
+
 function collectPgDump(): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const databaseUrl = process.env.DATABASE_URL;
@@ -18,7 +49,18 @@ function collectPgDump(): Promise<Buffer> {
       return;
     }
 
-    const child = spawn("pg_dump", ["-Fc", databaseUrl]);
+    let pgEnv: Record<string, string>;
+    try {
+      pgEnv = pgEnvFromUrl(databaseUrl);
+    } catch {
+      reject(new Error("DATABASE_URL is not a valid URL."));
+      return;
+    }
+
+    // Only PATH plus the PG* settings: the child doesn't need (and shouldn't inherit) the app's secrets.
+    const child = spawn("pg_dump", pgDumpArgs(), {
+      env: { PATH: process.env.PATH ?? "", ...pgEnv } as unknown as NodeJS.ProcessEnv,
+    });
     const chunks: Buffer[] = [];
     let stderr = "";
 

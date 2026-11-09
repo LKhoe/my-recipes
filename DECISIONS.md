@@ -1355,3 +1355,14 @@ From photos of the skill on the Echo Show 15, which is wall-mounted in portrait 
   applied after decompression. Image downloads are capped at `MAX_UPLOAD_BYTES` (10 MB), the same
   as a manual upload. `lib/services/youtube.ts` is untouched: its URLs are fixed Google/YouTube
   hosts (the caption URL comes from YouTube's own API response, not from user input).
+
+- **S3: the backup export omits credential tables' data.** `/api/backup` is open to every member,
+  so `db.dump` is made with `--exclude-table-data` for `session`, `account` and `verification`
+  (schema kept). Alexa has no token table: its auth is the `ALEXA_API_TOKEN` env var and the skill
+  id check. After a restore, members sign in with Google: `handleOAuthUserInfo` in the installed
+  better-auth (1.7.16, `dist/oauth2/link-account.mjs`) finds the user by email, sees no linked
+  account and, because `google` is a trusted provider, accounts linking is enabled and
+  `requireLocalEmailVerified` is false, creates the `account` row. `pg_dump` receives
+  `PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE/PGSSLMODE` in its env (and nothing else from the
+  app's env), not the URL in argv. Still in the dump: member emails/names, invite codes, all recipe
+  data.

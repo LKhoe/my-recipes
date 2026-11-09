@@ -202,9 +202,13 @@ Cooking) rather than an internal tool or a default-shadcn admin dashboard.
 - A "Download backup" action (settings page) available to any circle member — one click produces
   a complete, restorable snapshot the user can drop into Google Drive or anywhere else.
 - `GET /api/backup` streams a `my-recipes-backup-YYYY-MM-DD.tar.gz` containing:
-  - `db.dump` — `pg_dump` in custom format (`-Fc`, compressed, restorable with `pg_restore`)
+  - `db.dump` — `pg_dump` in custom format (`-Fc`, compressed, restorable with `pg_restore`). The
+    data of the credential tables `session`, `account` and `verification` is left out
+    (`--exclude-table-data`, schema kept): any member can download this and must not get other
+    members' session tokens, password hashes or OAuth tokens. After a restore members sign in
+    with Google again and the `account` rows are re-created by account linking.
   - `uploads/` — the recipe photo files from the image volume
-- Implementation: the route spawns `pg_dump` (pointed at `DATABASE_URL`) and pipes its stdout,
+- Implementation: the route spawns `pg_dump` (connection passed as `PG*` env vars derived from `DATABASE_URL`, never in argv) and pipes its stdout,
   together with the uploads directory, through a tar/gzip stream directly into the response — no
   temp files, no size limit surprises. Requires the `postgresql-client` package (matching the
   Postgres major version) in the app's Docker image.
