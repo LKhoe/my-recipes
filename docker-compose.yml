@@ -17,8 +17,10 @@ services:
       args:
         - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
     ports:
-      # yarg-aggregator already owns 3000 on the Pi
-      - "${PORT:-3001}:3000"
+      # Loopback only: the app is reached through the Cloudflare tunnel (localinfra_tunnel network),
+      # never straight on the LAN. The tunnel and Better Auth's rate limiter trust CF-Connecting-IP,
+      # which anyone who could hit this port directly could forge. yarg-aggregator owns 3000 on the Pi.
+      - "127.0.0.1:${PORT:-3001}:3000"
     environment:
       # Database — local-infra Postgres; DATABASE_URL carries this app's own role
       # (create it with: local-infra/scripts/new-project.sh my_recipes --no-redis)

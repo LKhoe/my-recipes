@@ -16,7 +16,7 @@ the image is built and the container runs on the Pi. Nothing is cloned on the Pi
 └──────────│───────────────────────────┘     └──────────────────────────────────────────┘
            ▼
   localinfra-tunnel (Cloudflare) → http://my-recipes:3000
-  LAN: http://umbrel.local:3001
+  Pi only: http://127.0.0.1:3001 (published on loopback, not on the LAN)
 ```
 
 - **Postgres** and **photo storage** (S3, on Garage) come from [local-infra](../local-infra) (start
@@ -97,7 +97,7 @@ instead (README, "Local development"). Every key is in `.env.example` and the RE
 | `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET` | from `new-project.sh --s3`: `http://localinfra-s3:3900`, `garage`, `my-recipes` |
 | `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | from `new-project.sh --s3`; the key can only read/write `my-recipes` |
 | `NEXT_PUBLIC_APP_URL`, `BETTER_AUTH_URL` | the public URL. `NEXT_PUBLIC_APP_URL` is baked in at **build** time |
-| `PORT` | host port on the Pi, default `3001` (yarg owns `3000`) |
+| `PORT` | host port on the Pi, default `3001` (yarg owns `3000`); bound to `127.0.0.1` only, so the app is not reachable on the LAN, only through the tunnel |
 | `TZ` | default `America/Sao_Paulo`; decides "today" for the meal plan |
 
 ## Redeploy after changes
@@ -119,7 +119,7 @@ DOCKER_CONTEXT=umbrel docker compose ps                         # STATUS should 
 DOCKER_CONTEXT=umbrel docker compose logs -f my-recipes
 DOCKER_CONTEXT=umbrel docker compose restart my-recipes
 DOCKER_CONTEXT=umbrel docker compose exec my-recipes sh
-curl -s http://umbrel.local:3001/api/health                     # {"status":"ok"} = database + bucket reachable
+DOCKER_CONTEXT=umbrel docker exec my-recipes wget -qO- http://127.0.0.1:3000/api/health   # {"status":"ok"} = database + bucket reachable (host port 3001 is loopback-only on the Pi)
 ```
 
 Password-reset links are only logged (no email provider): find them with

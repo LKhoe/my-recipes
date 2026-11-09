@@ -52,9 +52,9 @@ redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`). Google is the only 
 | `BETTER_AUTH_SECRET` | yes | `openssl rand -base64 32` |
 | `BETTER_AUTH_URL` | yes | Base URL of the app (public URL on the Pi) |
 | `NEXT_PUBLIC_APP_URL` | yes | Public base URL — also a Docker **build** arg, rebuild after changing it |
-| `PORT` | no | Host port on the Pi, default `3001` (yarg owns `3000`) |
+| `PORT` | no | Host port on the Pi, default `3001` (yarg owns `3000`); published on `127.0.0.1` only, so no LAN access: use the tunnel or an SSH port forward |
 | `TZ` | no | Server timezone, default `America/Sao_Paulo` — decides "today" for the meal plan |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | Enables Google sign-in |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | yes | Google sign-in, the only way in |
 | `LLM_BASE_URL` / `LLM_API_KEY` | no (Phase 1+) | LLM import fallback, through local-infra's LLM gateway (`provision-app.sh ... --llm`) |
 | `YOUTUBE_API_KEY` | no (Phase 1+) | YouTube description fetch and playlist listing (playlist import needs it); transcripts need no key |
 | `ALEXA_API_TOKEN` | no (Phase 4+) | Shared-secret bearer token for `/api/alexa/*` |

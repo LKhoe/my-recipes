@@ -1397,3 +1397,7 @@ From photos of the skill on the Echo Show 15, which is wall-mounted in portrait 
   `public, max-age=31536000, immutable` is safe for `recipes/{id}/{file}`. Cook photos
   (`recipes/{id}/cooked/…`, login required) stay `private`. Side effect: a deleted recipe photo may
   stay reachable from Cloudflare's cache for as long as it is cached, if someone has the URL.
+
+- **S10: host port on loopback.** `127.0.0.1:${PORT:-3001}:3000`. The only public path is the
+  Cloudflare tunnel over the `localinfra_tunnel` network; LAN devices can no longer reach the app
+  directly (and can't forge `CF-Connecting-IP`, S1). Health checks from the Pi use `docker exec`.

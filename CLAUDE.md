@@ -6,7 +6,7 @@ silent: `DECISIONS.md` (newest last); Pi deployment: `DEPLOY.md`; overview: `REA
 ## Commands
 
 ```bash
-npm run dev                # http://localhost:3000 (host port on the Pi is 3001)
+npm run dev                # http://localhost:3000 (host port on the Pi is 3001, loopback only)
 npm run typecheck && npm run lint && npm test
 npm run db:generate        # after editing lib/db/schema.ts — commit the migration
 npm run db:migrate         # applies migrations using .env.local
