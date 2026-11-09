@@ -128,7 +128,13 @@ function screenData(res: ResponseEnvelope) {
   return (directive(res, "Alexa.Presentation.APL.RenderDocument")?.datasources as { data: Record<string, unknown> }).data;
 }
 
-const match = (id: string, title: string, hasSteps = true): RecipeNameMatch => ({ id, title, imagePath: null, hasSteps });
+const match = (id: string, title: string, hasSteps = true, score = 0.5): RecipeNameMatch => ({
+  id,
+  title,
+  imagePath: null,
+  hasSteps,
+  score,
+});
 
 const fetchMock = vi.fn();
 
@@ -249,6 +255,33 @@ describe("choosing a recipe by name", () => {
     const res = await send(intent("StartRecipeIntent", { recipeName: "cheesecake" }));
     expect(kitchen.sendToKitchen).toHaveBeenCalledWith("r1", null);
     expect(screenToken(res)).toBe("ingredients");
+  });
+});
+
+describe("fuzzy matches", () => {
+  it("starts a clear winner among several matches without asking", async () => {
+    recipes.searchRecipesByTitle.mockResolvedValue([
+      match("r1", "Bolo de cenoura", true, 0.9),
+      match("r2", "Bolo de chocolate", true, 0.5),
+    ]);
+    kitchen.getActiveKitchenRecipe.mockResolvedValue(inKitchen());
+    const res = await send(intent("StartRecipeIntent", { recipeName: "bolo de cenora" }));
+    expect(kitchen.sendToKitchen).toHaveBeenCalledWith("r1", null);
+    expect(screenToken(res)).toBe("ingredients");
+  });
+
+  it("lists the options when the best matches are tied or weak", async () => {
+    recipes.searchRecipesByTitle.mockResolvedValue([
+      match("r1", "Bolo de cenoura", true, 0.9),
+      match("r2", "Bolo de cenoura com chocolate", true, 0.9),
+    ]);
+    const tied = await send(intent("StartRecipeIntent", { recipeName: "bolo de cenora" }));
+    expect(screenToken(tied)).toBe("choose");
+
+    recipes.searchRecipesByTitle.mockResolvedValue([match("r1", "Molho", true, 0.4), match("r2", "Bolo", true, 0.38)]);
+    const weak = await send(intent("StartRecipeIntent", { recipeName: "bolos" }));
+    expect(screenToken(weak)).toBe("choose");
+    expect(kitchen.sendToKitchen).not.toHaveBeenCalled();
   });
 });
 

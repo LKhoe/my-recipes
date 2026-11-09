@@ -106,8 +106,11 @@ Cooking) rather than an internal tool or a default-shadcn admin dashboard.
 - Free-form tags (e.g. cuisine, diet, meal type) plus a fixed set of categories (e.g. Breakfast,
   Main, Dessert). The category list is seeded via a Drizzle seed script on first deploy.
 - Search/filter by text query, tag, category, and ingredient.
-- Text search is plain `ILIKE` over title/description/ingredient names — adequate at this scale;
-  no full-text-search (tsvector) infrastructure in v1.
+- Text search: the title is matched fuzzily (pg_trgm, accent- and case-insensitive: substring,
+  word similarity and whole-title similarity, GIN index on `f_unaccent(lower(title))`, exact and
+  prefix matches ranked first, query capped at 100 characters); description and ingredient names
+  keep a plain accent-insensitive `ILIKE`. The web list and the Alexa skill use the same title
+  search (`lib/services/recipe-search.ts`). No full-text-search (tsvector) infrastructure.
 
 ### 4.3 Scaling & Unit Conversion
 - Adjust servings on a recipe view; ingredient quantities scale proportionally.

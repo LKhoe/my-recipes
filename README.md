@@ -129,7 +129,7 @@ confirmed all rows came back intact.
 manifest are in `skill-package/`.
 
 - "Alexa, pede para minhas receitas preparar cheesecake" (or "Alexa, abre minhas receitas", then
-  "preparar cheesecake") searches recipe titles by similarity; the start screen also has a search
+  "preparar cheesecake") searches recipe titles by trigram similarity (the same search as the web list, accent- and case-insensitive); the start screen also has a search
   box for typing. One match starts it; several (up to ten) are listed on screen to pick by voice
   ("a segunda") or touch.
 - "Silenciar" on any screen turns the voice off (it stays off until "Ativar voz"): answers then

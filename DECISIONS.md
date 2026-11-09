@@ -1415,3 +1415,19 @@ From photos of the skill on the Echo Show 15, which is wall-mounted in portrait 
   fails unless drizzle-kit explicitly says "No schema changes" (a rename prompt crashes it without
   a failing exit code in this drizzle-kit version, so the message is what counts). It runs in the
   builder stage, so a schema edit without a committed migration now fails the build.
+
+- **P1: one trigram title search for the web list and Alexa.** Migration 0013 creates `pg_trgm` and
+  `unaccent` (trusted extensions, creatable by the database owner: verified with a non-superuser
+  owner role on Postgres 17), `f_unaccent(text)` (IMMUTABLE wrapper with the dictionary pinned, which
+  an index expression needs) and a GIN `gin_trgm_ops` index on `f_unaccent(lower(title))`.
+  `lib/services/recipe-search.ts` builds the SQL fragments both callers use: match = `LIKE '%q%'`
+  OR `q <% title` (word similarity, threshold 0.35) OR `title % q` (whole-string similarity, 0.45,
+  for a query longer than the title), all index-capable (EXPLAIN shows a BitmapOr of three scans of
+  `recipe_title_trgm_idx`). The `<%`/`%` operators read their thresholds from `pg_trgm.*` settings,
+  so the query runs in a transaction with `set_config(..., true)` (local, reverts on commit).
+  Score = `GREATEST(word_similarity, similarity)`; order: exact, prefix, score, newest (Alexa:
+  recipes with a method first, then exact, contains, score). The query is trimmed and cut to 100
+  characters, and LIKE wildcards in it are escaped. The web list still matches description and
+  ingredient names with plain ILIKE (prose and common words, not worth fuzziness). Alexa starts a
+  recipe on its own for an exact title, a single match, or a best match with score >= 0.7 and a lead
+  of >= 0.15 over the next; anything else shows the list, and no match keeps the old "não achei" reply.

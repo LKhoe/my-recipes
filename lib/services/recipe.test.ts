@@ -102,6 +102,56 @@ describe("listRecipes accent-insensitive search", () => {
   });
 });
 
+describe("fuzzy title search (web list and Alexa share it)", () => {
+  const stamp = Date.now();
+  const dish = `cenourete${stamp.toString(36).replace(/\d/g, "")}`;
+  let userId: string;
+
+  afterAll(async () => {
+    if (userId) await db.delete(user).where(eq(user.id, userId));
+  });
+
+  it("matches partial names, dropped accents, other case and a typo; exact first; escapes wildcards", async () => {
+    const [created] = await db
+      .insert(user)
+      .values({ email: `fuzzy-search-${stamp}@example.com`, name: "Fuzzy" })
+      .returning({ id: user.id });
+    userId = created.id;
+    const base = {
+      description: null, servings: null, prepTime: null, cookTime: null, steps: [{ text: "Asse." }],
+      ingredients: [], categoryIds: [], tags: [], sourceUrl: null, videoUrl: null,
+    };
+    const { id: plain } = await createRecipe(userId, { ...base, title: `Bolo de ${dish}` });
+    const { id: coated } = await createRecipe(userId, { ...base, title: `Bolo de ${dish} com cobertura de chocolate` });
+    await createRecipe(userId, { ...base, title: "Pão de queijo mineiro" });
+
+    // Partial name, upper case: exact/prefix before longer titles; both found.
+    const partial = await listRecipes({ q: `BOLO DE ${dish.toUpperCase()}` });
+    expect(partial.map((r) => r.id).slice(0, 2)).toEqual([plain, coated]);
+
+    // Accents dropped on the stored side: query typed with them still matches.
+    const accented = await listRecipes({ q: "pão de queijo" });
+    expect(accented.some((r) => r.title === "Pão de queijo mineiro")).toBe(true);
+    expect((await listRecipes({ q: "PAO DE QUEIJO MINEIRO" })).some((r) => r.title === "Pão de queijo mineiro")).toBe(true);
+
+    // A transcription error and an extra word.
+    const typo = await searchRecipesByTitle(`bolo de ${dish.replace("cenourete", "cenorete")}`);
+    expect(typo.map((m) => m.id)).toContain(plain);
+    expect(typo[0].score).toBeGreaterThan(0.35);
+
+    // The web list and the skill return the same recipes for the same words.
+    const web = (await listRecipes({ q: `bolo de ${dish}` })).map((r) => r.id).sort();
+    const alexa = (await searchRecipesByTitle(`bolo de ${dish}`, 50)).map((r) => r.id).sort();
+    expect(alexa).toEqual(expect.arrayContaining([plain, coated]));
+    expect(web).toEqual(expect.arrayContaining([plain, coated]));
+
+    // LIKE wildcards in the query are literal, and a very long query is capped, not an error.
+    expect(await searchRecipesByTitle("%")).toEqual([]);
+    expect(await searchRecipesByTitle("a".repeat(5000))).toEqual([]);
+    expect(await listRecipes({ q: "_".repeat(300) })).toEqual([]);
+  });
+});
+
 describe("ingredient sections", () => {
   const testEmail = `ingredient-sections-test-${Date.now()}@example.com`;
   let userId: string;

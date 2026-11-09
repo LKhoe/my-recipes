@@ -18,6 +18,7 @@ import {
 } from "@/lib/services/kitchen";
 import { LLMLimitError } from "@/lib/services/llm";
 import { searchRecipesByTitle } from "@/lib/services/recipe";
+import { pickConfidentMatch } from "@/lib/recipe-search";
 import { findRecipeIngredient, ingredientKey, suggestSubstitutes } from "@/lib/services/substitution";
 import {
   absoluteImageUrl,
@@ -232,8 +233,11 @@ async function searchAndStart(h: HandlerInput, rawQuery: string | null, typed = 
     return askForRecipe(h, `Não achei nenhuma receita chamada ${query}. `);
   }
 
+  // Same search as the web list (pg_trgm). Start on its own for an exact title, a single match, or
+  // a best match that is strong and clearly ahead of the rest; otherwise offer the list.
   const exact = matches.find((m) => ingredientKey(m.title) === ingredientKey(query));
-  if (exact || matches.length === 1) return startRecipe(h, (exact ?? matches[0]).id);
+  const winner = exact ?? (matches.length === 1 ? matches[0] : pickConfidentMatch(matches));
+  if (winner) return startRecipe(h, winner.id);
 
   const candidates = matches.map(({ id, title, imagePath, hasSteps }) => ({ id, title, imagePath, hasSteps }));
   setSession(h, { phase: "choosing", candidates });

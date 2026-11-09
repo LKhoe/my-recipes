@@ -18,6 +18,8 @@ import { normalizeGroupLabel } from "@/lib/ingredient-groups";
 import { normalizeUnit } from "@/lib/services/ingredient-parser";
 import { sourceKey } from "@/lib/source-url";
 import { findOrCreateTag } from "@/lib/services/tag";
+import { buildTitleSearch, withSearchThresholds } from "@/lib/services/recipe-search";
+import { cleanSearchQuery, escapeLike } from "@/lib/recipe-search";
 import type { RecipeDetail, RecipeInput, RecipeListItem } from "@/types";
 
 // Accent-insensitive ILIKE (SPEC §4.2's "adequate at this scale" plain-ILIKE search) — plain
@@ -210,11 +212,14 @@ export type RecipeListFilters = {
 export async function listRecipes(filters: RecipeListFilters = {}): Promise<RecipeListItem[]> {
   const conditions = [isNull(recipe.deletedAt)];
 
-  if (filters.q) {
-    const pattern = `%${filters.q}%`;
+  // Title: fuzzy (pg_trgm, shared with the Alexa skill). Description and ingredient names keep the
+  // plain accent-insensitive substring match: they are prose and short words, not names to mistype.
+  const titleSearch = buildTitleSearch(filters.q, recipe.title);
+  if (titleSearch) {
+    const pattern = `%${escapeLike(cleanSearchQuery(filters.q))}%`;
     conditions.push(
       or(
-        unaccentIlike(recipe.title, pattern),
+        titleSearch.match,
         unaccentIlike(recipe.description, pattern),
         exists(
           db
@@ -268,20 +273,26 @@ export async function listRecipes(filters: RecipeListFilters = {}): Promise<Reci
     );
   }
 
-  const rows = await db
-    .select({
-      id: recipe.id,
-      title: recipe.title,
-      description: recipe.description,
-      authorName: user.name,
-      reviewPending: recipe.reviewPending,
-      hasSteps: sql<boolean>`jsonb_array_length(${recipe.steps}) > 0`,
-      createdAt: recipe.createdAt,
-    })
-    .from(recipe)
-    .leftJoin(user, eq(recipe.authorId, user.id))
-    .where(and(...conditions))
-    .orderBy(desc(recipe.createdAt));
+  const selectRows = (executor: Pick<typeof db, "select">) =>
+    executor
+      .select({
+        id: recipe.id,
+        title: recipe.title,
+        description: recipe.description,
+        authorName: user.name,
+        reviewPending: recipe.reviewPending,
+        hasSteps: sql<boolean>`jsonb_array_length(${recipe.steps}) > 0`,
+        createdAt: recipe.createdAt,
+      })
+      .from(recipe)
+      .leftJoin(user, eq(recipe.authorId, user.id))
+      .where(and(...conditions))
+      .orderBy(
+        // With a query: exact title, then titles starting with it, then the best fit; newest breaks ties.
+        ...(titleSearch ? [desc(titleSearch.exact), desc(titleSearch.prefix), desc(titleSearch.score)] : []),
+        desc(recipe.createdAt),
+      );
+  const rows = titleSearch ? await withSearchThresholds(selectRows) : await selectRows(db);
 
   const results: RecipeListItem[] = [];
   for (const row of rows) {
@@ -319,39 +330,36 @@ export type RecipeNameMatch = {
   title: string;
   imagePath: string | null;
   hasSteps: boolean;
+  /** 0..1 title fit (see recipe-search.ts); lets the skill start a clear winner without asking. */
+  score: number;
 };
-
-// Below this, word_similarity() matches are mostly noise ("bolo" vs "molho"); a substring match is
-// always kept.
-const NAME_SIMILARITY_THRESHOLD = 0.35;
 
 /**
  * The Alexa skill's "preparar cheesecake": recipes whose title contains the spoken name or is
- * close to it (pg_trgm's word_similarity, migration 0010, survives a misheard letter or two).
- * Recipes with a method come first, then an exact title, then substring matches, then similarity.
+ * close to it, through the same pg_trgm search as the web list (lib/services/recipe-search.ts, which
+ * survives a misheard letter or a dropped accent). Recipes with a method come first (she can only
+ * cook those), then an exact title, then titles containing the name, then the best fit.
  */
 export async function searchRecipesByTitle(query: string, limit = 5): Promise<RecipeNameMatch[]> {
-  const q = query.trim();
-  if (!q) return [];
+  const titleSearch = buildTitleSearch(query, recipe.title);
+  if (!titleSearch) return [];
 
-  const title = sql`unaccent(lower(${recipe.title}))`;
-  const needle = sql`unaccent(lower(${q}))`;
   const hasSteps = sql<boolean>`jsonb_array_length(${recipe.steps}) > 0`;
-  const contains = sql`${title} like '%' || ${needle} || '%'`;
-  const score = sql`word_similarity(${needle}, ${title})`;
 
-  const rows = await db
-    .select({ id: recipe.id, title: recipe.title, hasSteps })
-    .from(recipe)
-    .where(and(isNull(recipe.deletedAt), or(contains, sql`${score} > ${NAME_SIMILARITY_THRESHOLD}`)))
-    .orderBy(
-      desc(hasSteps),
-      desc(sql`${title} = ${needle}`),
-      desc(contains),
-      desc(score),
-      desc(recipe.createdAt),
-    )
-    .limit(limit);
+  const rows = await withSearchThresholds((tx) =>
+    tx
+      .select({ id: recipe.id, title: recipe.title, hasSteps, score: titleSearch.score })
+      .from(recipe)
+      .where(and(isNull(recipe.deletedAt), titleSearch.match))
+      .orderBy(
+        desc(hasSteps),
+        desc(titleSearch.exact),
+        desc(titleSearch.contains),
+        desc(titleSearch.score),
+        desc(recipe.createdAt),
+      )
+      .limit(limit),
+  );
   if (rows.length === 0) return [];
 
   // Each recipe's first photo. A correlated subquery in the select above doesn't work: drizzle
@@ -364,7 +372,7 @@ export async function searchRecipesByTitle(query: string, limit = 5): Promise<Re
   const firstImage = new Map<string, string>();
   for (const image of images) if (!firstImage.has(image.recipeId)) firstImage.set(image.recipeId, image.path);
 
-  return rows.map((r) => ({ ...r, imagePath: firstImage.get(r.id) ?? null }));
+  return rows.map((r) => ({ ...r, score: Number(r.score), imagePath: firstImage.get(r.id) ?? null }));
 }
 
 export async function getRecipeById(recipeId: string): Promise<RecipeDetail | null> {
