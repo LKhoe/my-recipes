@@ -7,3 +7,4 @@ uploads
 *.tar.gz
 npm-debug.log*
 .env.bak-*
+dist-scripts

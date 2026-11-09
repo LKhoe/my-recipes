@@ -29,6 +29,14 @@ ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 # Build the application (output: "standalone" is set in next.config.ts)
 RUN npm run build
 
+# Bundle the scripts that run inside the container (migrate, seed, create-invite) with their
+# dependencies (pg, drizzle-orm) into single files: the runner needs no node_modules for them.
+RUN npm run scripts:bundle
+
+# npm installs sharp's prebuilt binaries for glibc and musl; this image is Alpine (musl), so the
+# glibc ones (~18 MB) are dead weight, both in the standalone output and in the copy below.
+RUN find node_modules/@img .next/standalone/node_modules/@img -maxdepth 1 -name '*-linux-*' ! -name '*musl*' -exec rm -rf {} +
+
 # Production stage
 FROM node:24-alpine AS runner
 
@@ -46,14 +54,6 @@ RUN apk add --no-cache postgresql${PG_MAJOR}-client
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Production deps at the lockfile's exact versions, for the plain-.mjs scripts (migrate, seed,
-# create-invite, upload-photos-to-s3) that run outside the Next.js server, and for native files
-# Next's standalone tracing misses (sharp's dlopen'd libvips .so). Must come from the lockfile:
-# a bare `npm install <pkg>` re-resolves every dependency to its latest version, and a newer
-# libvips next to the standalone output's locked sharp fails with "libvips-cpp.so.X: No such file".
-COPY --from=builder --chown=nextjs:nodejs /app/package.json /app/package-lock.json ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
-
 # Copy only the necessary files for standalone mode
 COPY --from=builder /app/public ./public
 
@@ -66,9 +66,16 @@ RUN chown nextjs:nodejs .next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Copy database migration files and migration/seed scripts (plain .mjs — no tsx/drizzle-kit needed)
+# sharp's native pieces. Next's file tracing copies sharp's JS into the standalone node_modules
+# but misses the dlopen'd libvips .so, and a libvips that doesn't match the locked sharp fails at
+# load with "libvips-cpp.so.X: No such file". Copying @img from the builder keeps them in lockstep
+# with the lockfile (never `npm install <pkg>` here: it re-resolves every dependency to latest).
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@img ./node_modules/@img
+
+# Database migration files and the bundled scripts (self-contained .mjs from `npm run scripts:bundle`,
+# same paths the entrypoint and DEPLOY.md use: node scripts/migrate.mjs, seed.mjs, create-invite.mjs)
 COPY --from=builder --chown=nextjs:nodejs /app/lib/db/migrations ./lib/db/migrations
-COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
+COPY --from=builder --chown=nextjs:nodejs /app/dist-scripts ./scripts
 
 # Copy and set up entrypoint script
 COPY --chown=nextjs:nodejs docker-entrypoint.sh /usr/local/bin/

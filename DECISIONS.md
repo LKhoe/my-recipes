@@ -1431,3 +1431,20 @@ From photos of the skill on the Echo Show 15, which is wall-mounted in portrait 
   ingredient names with plain ILIKE (prose and common words, not worth fuzziness). Alexa starts a
   recipe on its own for an exact title, a single match, or a best match with score >= 0.7 and a lead
   of >= 0.15 over the next; anything else shows the list, and no match keeps the old "não achei" reply.
+
+- **O1: slimmer image (899 MB → ~243 MB).** The runner no longer runs `npm ci --omit=dev` (715 MB of
+  node_modules laid over the standalone output). What the runtime needs: the standalone output
+  (Turbopack bundles heic-convert, youtubei.js, pg, drizzle, better-auth into the server chunks;
+  only `sharp` and the S3 client stay external and are already in the standalone `node_modules`),
+  `node_modules/@img` from the builder (the standalone trace misses sharp's dlopen'd libvips `.so`;
+  the glibc variants are pruned since the image is musl), and the three in-container scripts as
+  esbuild bundles (`scripts/bundle.mjs`; `pg-native` external; a `createRequire` banner for the
+  CommonJS code inside pg/drizzle). `esbuild` is now an explicit devDependency (it was only
+  transitive via tsx/drizzle-kit). `upload-photos-to-s3.mjs` is not in the image (needs sharp;
+  it runs from the Mac per DEPLOY.md). `postgresql17-client` stays for the backup route.
+- **S7: container hardening.** `cap_drop: [ALL]`, `no-new-privileges`, `read_only: true` with tmpfs
+  `/tmp` (64 MB) and `/app/.next/cache` (64 MB, uid/gid 1001). Verified by running the built image
+  with exactly these flags against a scratch Postgres: entrypoint (wait, migrate, seed), server,
+  pages, `create-invite` and sharp all work, and `docker diff` shows only `/app/.next/cache`
+  created. Nothing else writes to disk: photos go to S3, `pg_dump` streams to memory, the
+  `uploads/` folder is not used at runtime. tmpfs counts against the 768 MB memory limit.

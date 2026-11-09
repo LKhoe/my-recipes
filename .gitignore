@@ -38,3 +38,4 @@ next-env.d.ts
 # every env variant (backups, .env.dev, ...); only the example is tracked
 .env*
 !.env.example
+/dist-scripts/
