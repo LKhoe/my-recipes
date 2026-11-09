@@ -65,7 +65,7 @@ redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`). Email/password work
 - `npm run lint` / `typecheck` / `test`
 - `npm run db:generate` / `db:migrate` / `db:studio` / `db:seed` / `db:invite`
 - `npm run photos:upload -- <folder> [--dry-run]` — copy photos from a folder into the bucket
-- `./deploy.sh` — build and restart on the Pi (see `DEPLOY.md`)
+- `./deploy.sh` — build on the Mac, load into the Pi and restart (see `DEPLOY.md`)
 
 ## Deployment
 
@@ -74,7 +74,7 @@ S3 (Garage), deployed from the Mac through the `umbrel` Docker context, followin
 standard app deploy (`../local-infra/DEPLOYING-APPS.md`). Specifics: **`DEPLOY.md`**.
 
 ```bash
-./deploy.sh              # build on the Pi, restart, wait for healthy
+./deploy.sh              # build here (linux/arm64), load it into the Pi, restart, wait for healthy
 ./deploy.sh --release    # first bump the version, commit and push
 ./deploy.sh --rollback   # restart the build that was live before the last deploy
 ```

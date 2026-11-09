@@ -47,7 +47,7 @@ DOCKER_CONTEXT=umbrel ../local-infra/scripts/provision-app.sh my_recipes . --no-
 
 # 3. optional: move existing data in — BEFORE the first start (see below)
 
-# 4. build on the Pi and start (3–5 minutes)
+# 4. build here, load into the Pi and start (about a minute)
 ./deploy.sh
 
 # 5. first invite code, if the database is new
@@ -101,7 +101,7 @@ instead (README, "Local development"). Every key is in `.env.example` and the RE
 ## Redeploy after changes
 
 ```bash
-./deploy.sh              # build the working tree on the Pi, restart, wait for healthy
+./deploy.sh              # build the working tree here (linux/arm64), load it into the Pi, restart, wait for healthy
 ./deploy.sh --release    # first bump the patch version, commit and push
 ./deploy.sh --rollback   # restart the image that was live before the last deploy
 ```
