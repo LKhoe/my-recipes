@@ -1401,3 +1401,10 @@ From photos of the skill on the Echo Show 15, which is wall-mounted in portrait 
 - **S10: host port on loopback.** `127.0.0.1:${PORT:-3001}:3000`. The only public path is the
   Cloudflare tunnel over the `localinfra_tunnel` network; LAN devices can no longer reach the app
   directly (and can't forge `CF-Connecting-IP`, S1). Health checks from the Pi use `docker exec`.
+
+- **S6: security headers** in `next.config.ts` for all routes: `nosniff`, `X-Frame-Options: DENY`,
+  `strict-origin-when-cross-origin`, HSTS (2 years, includeSubDomains; browsers ignore it over plain
+  http, e.g. localhost) and a Permissions-Policy that only disables camera, microphone, geolocation,
+  payment, usb, bluetooth, serial and hid. Photo capture uses `<input type=file>` (not
+  `getUserMedia`), so camera stays off safely. Nothing frames the app (Alexa APL loads images by
+  URL, not pages; the only iframe is the app embedding YouTube). No CSP for now.
