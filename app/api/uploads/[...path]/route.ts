@@ -56,7 +56,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ path
     headers: {
       "Content-Type": contentType,
       ...(object.contentLength !== undefined && { "Content-Length": String(object.contentLength) }),
-      "Cache-Control": "private, max-age=31536000, immutable",
+      // Object keys are `<uuid>.webp` and never rewritten (processAndStoreImage), so the bytes behind
+      // a recipe-photo URL never change: shared caches (Cloudflare) may keep them. Cook photos are
+      // the circle's, so they stay private to the browser. A deleted photo can linger at the edge.
+      "Cache-Control": PUBLIC_KEY.test(key)
+        ? "public, max-age=31536000, immutable"
+        : "private, max-age=31536000, immutable",
     },
   });
 }

@@ -1391,3 +1391,9 @@ From photos of the skill on the Echo Show 15, which is wall-mounted in portrait 
   loopback-only (S10).
 - **O5: `session.cookieCache` on (5 min).** Fewer DB reads per request; revoking a session
   (sign-out on another device, removing a user) can take up to 5 minutes to take effect.
+
+- **O4: public recipe photos are cacheable by Cloudflare.** Object keys are `<randomUUID>.webp`
+  (`lib/services/image.ts`), written once per upload or replacement and never overwritten, so
+  `public, max-age=31536000, immutable` is safe for `recipes/{id}/{file}`. Cook photos
+  (`recipes/{id}/cooked/…`, login required) stay `private`. Side effect: a deleted recipe photo may
+  stay reachable from Cloudflare's cache for as long as it is cached, if someone has the URL.
