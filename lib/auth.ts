@@ -29,6 +29,15 @@ export const auth = betterAuth({
     "/set-password",
   ],
 
+  // The app is only reached through Cloudflare's tunnel, which sets CF-Connecting-IP to the real
+  // client. Better Auth's default is the first X-Forwarded-For value, which a client can forge,
+  // and its rate limiter keys on this address.
+  advanced: {
+    ipAddress: {
+      ipAddressHeaders: ["cf-connecting-ip"],
+    },
+  },
+
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
