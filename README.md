@@ -32,13 +32,14 @@ npm run dev
 the `npm run db:*` scripts read `.env.local` on top of `.env`, so `.env.local` wins wherever both
 define a key — keep `DATABASE_URL`, `S3_*`, `NEXT_PUBLIC_APP_URL` and `BETTER_AUTH_URL` in it.
 
-Open http://localhost:3000/signup and use the printed invite code to create the first account.
+Open http://localhost:3000/signup, enter the printed invite code and continue with Google to create the
+first account (Google OAuth must be configured, below).
 Every account after that can be invited by an existing member from **Settings → Invite someone**.
 
 ### Google OAuth
 
-Set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` to enable "Continue with Google" (authorized
-redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`). Email/password works without it.
+Set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` to enable "Entrar com Google" (authorized
+redirect URI: `<BETTER_AUTH_URL>/api/auth/callback/google`). Google is the only sign-in method, so this is required.
 
 ## Environment variables
 

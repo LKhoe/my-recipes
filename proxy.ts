@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
-const AUTH_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password"];
+const AUTH_PATHS = ["/login", "/signup"];
 
 // Browsing the collection is open to anyone: the root redirect, the list/search, a recipe and its
 // cook mode. Everything else — adding/editing recipes, planning, shopping list, settings — needs

@@ -6,10 +6,12 @@ export function GoogleButton({
   onClick,
   loading,
   disabled,
+  label = "Entrar com Google",
 }: {
   onClick: () => void;
   loading: boolean;
   disabled?: boolean;
+  label?: string;
 }) {
   return (
     <Button
@@ -21,7 +23,7 @@ export function GoogleButton({
       onClick={onClick}
     >
       {loading ? <Loader2 className="size-5 animate-spin" /> : <GoogleIcon className="size-5" />}
-      {loading ? "Abrindo o Google…" : "Continuar com Google"}
+      {loading ? "Abrindo o Google…" : label}
     </Button>
   );
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isPublicPath } from "./proxy";
 
 describe("isPublicPath", () => {
-  it.each(["/", "/recipes", "/recipes/", "/recipes/abc-123", "/recipes/abc-123/cook", "/login", "/reset-password"])(
+  it.each(["/", "/recipes", "/recipes/", "/recipes/abc-123", "/recipes/abc-123/cook", "/login", "/signup"])(
     "lets %s through without a session",
     (path) => {
       expect(isPublicPath(path)).toBe(true);
@@ -15,6 +15,8 @@ describe("isPublicPath", () => {
     "/plan",
     "/shopping-list",
     "/settings",
+    "/forgot-password",
+    "/reset-password",
     "/recipesx",
     "/recipes/abc/cook/extra",
   ])("sends %s to login without a session", (path) => {

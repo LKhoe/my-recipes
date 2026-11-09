@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { isInviteCodeRedeemable, PENDING_INVITE_COOKIE, PENDING_INVITE_COOKIE_MAX_AGE_SECONDS } from "@/lib/invite";
 
-// Called before either sign-up path (email/password submit, or "Continue with Google" click)
-// so the invite code survives as a cookie through the OAuth redirect round trip. The
+// Called before the "Continue with Google" redirect on the sign-up page so the invite code
+// survives as a cookie through the OAuth round trip. SameSite=Lax is required: Google's callback
+// is a cross-site top-level GET, which a Strict cookie would not accompany. The
 // databaseHooks.user.create hook in lib/auth.ts is the authoritative check; this endpoint is
 // the UX-facing pre-validation.
 export async function POST(request: NextRequest) {

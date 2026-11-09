@@ -1,50 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { safeRedirectPath } from "@/lib/safe-redirect";
 import { googleErrorMessage, isInviteRequiredError } from "@/lib/auth-errors";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { GoogleButton } from "@/components/auth/GoogleButton";
 
 export function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = safeRedirectPath(searchParams.get("redirect"));
   // Set by Better Auth when Google sign-in fails (errorCallbackURL below)
   const googleError = searchParams.get("error");
   const noAccount = isInviteRequiredError(googleError);
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(
     googleError && !noAccount ? googleErrorMessage(googleError) : null,
   );
-  const [loading, setLoading] = useState<"email" | "google" | null>(null);
-
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setLoading("email");
-
-    const { error: signInError } = await authClient.signIn.email({ email, password });
-
-    if (signInError) {
-      setError(signInError.message ?? "Não foi possível entrar.");
-      setLoading(null);
-      return;
-    }
-
-    router.push(redirect);
-    router.refresh();
-  }
+  const [loading, setLoading] = useState(false);
 
   async function handleGoogleLogin() {
     setError(null);
-    setLoading("google");
+    setLoading(true);
 
     const { error: signInError } = await authClient.signIn.social({
       provider: "google",
@@ -56,7 +33,7 @@ export function LoginForm() {
 
     if (signInError) {
       setError(signInError.message ?? "Não foi possível entrar com o Google.");
-      setLoading(null);
+      setLoading(false);
     }
   }
 
@@ -74,47 +51,13 @@ export function LoginForm() {
         </div>
       )}
 
-      <GoogleButton onClick={handleGoogleLogin} loading={loading === "google"} disabled={loading !== null} />
+      <GoogleButton onClick={handleGoogleLogin} loading={loading} />
 
-      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-        <div className="h-px flex-1 bg-border" />
-        ou com e-mail
-        <div className="h-px flex-1 bg-border" />
-      </div>
-
-      <form onSubmit={handleLogin} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="email">E-mail</Label>
-          <Input
-            id="email"
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Senha</Label>
-            <a href="/forgot-password" className="text-xs text-muted-foreground hover:underline">
-              Esqueceu a senha?
-            </a>
-          </div>
-          <Input
-            id="password"
-            type="password"
-            required
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="submit" disabled={loading !== null} className="mt-1">
-          {loading === "email" ? "Entrando…" : "Entrar"}
-        </Button>
-      </form>
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
 
       <p className="text-center text-sm text-muted-foreground">
         Recebeu um convite?{" "}

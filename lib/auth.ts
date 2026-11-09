@@ -13,15 +13,21 @@ export const auth = betterAuth({
     provider: "pg",
   }),
 
+  // Google is the only way in (DECISIONS.md "S8"). Explicitly off: the email/password sign-in and
+  // sign-up routes answer 400, and with no `sendResetPassword` the reset routes are inert too.
   emailAndPassword: {
-    enabled: true,
-    requireEmailVerification: false,
-    // No transactional email provider in v1 (SPEC is silent on one) — log the link so an
-    // admin can relay it manually. See DECISIONS.md.
-    sendResetPassword: async ({ user, url }) => {
-      console.log(`[auth] Password reset requested for ${user.email}: ${url}`);
-    },
+    enabled: false,
   },
+  // Belt and braces for the password routes; `account` rows of old password users are left alone.
+  disabledPaths: [
+    "/sign-in/email",
+    "/sign-up/email",
+    "/request-password-reset",
+    "/reset-password",
+    "/reset-password/:token",
+    "/change-password",
+    "/set-password",
+  ],
 
   socialProviders: {
     google: {
@@ -39,14 +45,15 @@ export const auth = betterAuth({
     accountLinking: {
       enabled: true,
       trustedProviders: ["google"],
-      // Emails are never verified here (no email provider), so the default `true` blocked every
-      // email/password member from linking Google ("account_not_linked"). Invite-only sign-up is
-      // the safeguard against pre-registering someone else's email. See DECISIONS.md.
+      // Members who signed up with a password have an unverified email (there was never an email
+      // provider), so the default `true` would refuse to link their Google account to them
+      // ("account_not_linked"). That link is how they keep getting in now that passwords are off.
+      // Google asserts the email, and new sign-ups need an invite. See DECISIONS.md "S8".
       requireLocalEmailVerified: false,
     },
   },
 
-  // SPEC §3: closed circle — every new account (either sign-up method) must carry a valid,
+  // SPEC §3: closed circle — every new account (Google is the only sign-up method) must carry a valid,
   // unused invite code. The code travels as a short-lived cookie set by POST /api/invite
   // before the sign-up request/OAuth redirect fires, since it needs to survive the Google
   // OAuth round trip where we don't control the callback request body.

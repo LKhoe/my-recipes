@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { ArrowRight, Check, Loader2, Ticket } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { googleErrorMessage, isInviteRequiredError } from "@/lib/auth-errors";
@@ -13,7 +13,7 @@ import { GoogleButton } from "@/components/auth/GoogleButton";
 
 /**
  * Checks the code and stores it in the short-lived pending-invite cookie that the sign-up hook
- * (lib/auth.ts) reads — for both email sign-up and the Google redirect round trip. Called again
+ * (lib/auth.ts) reads — across the Google redirect round trip. Called again
  * right before each sign-up attempt, since the cookie only lasts 10 minutes.
  */
 async function acceptInvite(code: string): Promise<string | null> {
@@ -57,7 +57,6 @@ function Steps({ current }: { current: 1 | 2 }) {
 }
 
 export function SignupForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const linkCode = searchParams.get("convite")?.trim().toLowerCase() ?? "";
   const googleError = searchParams.get("error");
@@ -68,9 +67,6 @@ export function SignupForm() {
   const autoCheck = Boolean(linkCode) && !googleError;
   const [accepted, setAccepted] = useState(false);
   const [checking, setChecking] = useState(autoCheck);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(
     googleError
       ? isInviteRequiredError(googleError)
@@ -78,7 +74,7 @@ export function SignupForm() {
         : googleErrorMessage(googleError)
       : null,
   );
-  const [loading, setLoading] = useState<"email" | "google" | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!autoCheck) return;
@@ -107,12 +103,12 @@ export function SignupForm() {
 
   async function handleGoogle() {
     setError(null);
-    setLoading("google");
+    setLoading(true);
     const inviteError = await acceptInvite(inviteCode);
     if (inviteError) {
       setError(inviteError);
       setAccepted(false);
-      setLoading(null);
+      setLoading(false);
       return;
     }
     const { error: signInError } = await authClient.signIn.social({
@@ -123,29 +119,8 @@ export function SignupForm() {
     });
     if (signInError) {
       setError(signInError.message ?? "Não foi possível continuar com o Google.");
-      setLoading(null);
+      setLoading(false);
     }
-  }
-
-  async function handleEmailSignup(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setLoading("email");
-    const inviteError = await acceptInvite(inviteCode);
-    if (inviteError) {
-      setError(inviteError);
-      setAccepted(false);
-      setLoading(null);
-      return;
-    }
-    const { error: signUpError } = await authClient.signUp.email({ name, email, password });
-    if (signUpError) {
-      setError(signUpError.message ?? "Não foi possível criar a conta.");
-      setLoading(null);
-      return;
-    }
-    router.push("/recipes");
-    router.refresh();
   }
 
   if (!accepted) {
@@ -223,11 +198,11 @@ export function SignupForm() {
         </button>
       </div>
 
-      <h2 className="mt-5 font-display text-display-sm text-foreground">Como você quer entrar?</h2>
+      <h2 className="mt-5 font-display text-display-sm text-foreground">Entre com sua conta Google</h2>
 
       <div className="mt-4 flex flex-col gap-2">
-        <GoogleButton onClick={handleGoogle} loading={loading === "google"} disabled={loading !== null} />
-        <p className="text-center text-xs text-muted-foreground">O jeito mais rápido: sem senha para lembrar.</p>
+        <GoogleButton onClick={handleGoogle} loading={loading} label="Continuar com Google" />
+        <p className="text-center text-xs text-muted-foreground">Sem senha para lembrar: o convite fica ligado ao e-mail da sua conta Google.</p>
       </div>
 
       {error && (
@@ -235,46 +210,6 @@ export function SignupForm() {
           {error}
         </p>
       )}
-
-      <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-        <div className="h-px flex-1 bg-border" />
-        ou crie uma senha
-        <div className="h-px flex-1 bg-border" />
-      </div>
-
-      <form onSubmit={handleEmailSignup} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="name">Nome</Label>
-          <Input id="name" required autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="email">E-mail</Label>
-          <Input
-            id="email"
-            type="email"
-            required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="password">Senha</Label>
-          <Input
-            id="password"
-            type="password"
-            required
-            minLength={8}
-            autoComplete="new-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <p className="text-xs text-muted-foreground">Pelo menos 8 caracteres.</p>
-        </div>
-        <Button type="submit" variant="secondary" disabled={loading !== null} className="w-full">
-          {loading === "email" ? "Criando conta…" : "Criar conta com e-mail"}
-        </Button>
-      </form>
     </div>
   );
 }

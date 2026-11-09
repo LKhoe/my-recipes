@@ -1366,3 +1366,21 @@ From photos of the skill on the Echo Show 15, which is wall-mounted in portrait 
   `PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE/PGSSLMODE` in its env (and nothing else from the
   app's env), not the URL in argv. Still in the dump: member emails/names, invite codes, all recipe
   data.
+
+- **S8: Google is the only sign-in method.** `emailAndPassword.enabled: false` (and the password
+  routes in `disabledPaths`); the email/password forms, forgot/reset-password pages and the
+  console-logged reset link are gone. `account` rows with password hashes are left alone.
+  - *Existing password-only members get in with Google and the same email.* Better Auth 1.7.16
+    (`dist/oauth2/link-account.mjs`, `handleOAuthUserInfo`): no account owns the Google id → look
+    the user up by email → no linked Google account → link when `google` is in `trustedProviders`
+    and `accountLinking.enabled` and (`requireLocalEmailVerified` is false, which is why that
+    setting stays: those members' emails were never verified). No user is created, so no invite is
+    needed for them. A Google email that matches nobody is a sign-up and goes through
+    `user.create.before`, which demands the invite code.
+  - *Invite cookie*: `POST /api/invite` sets `pending_invite_code` with `SameSite=Lax`,
+    `HttpOnly`, `Secure` in production, path `/`, 10 min. Lax cookies are sent on the top-level
+    cross-site GET that Google's redirect to `/api/auth/callback/google` is, so the hook can read
+    it (Strict would not be sent). The cookie is only meaningful when the user creation hook runs.
+  - *Alexa* doesn't use the web login: the skill endpoint is protected by the skill-id/signature
+    check and the `/api/alexa/*` helpers by `ALEXA_API_TOKEN`; there's no account-linking flow, so
+    nothing there depended on passwords.
