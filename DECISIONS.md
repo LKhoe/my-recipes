@@ -1343,3 +1343,15 @@ From photos of the skill on the Echo Show 15, which is wall-mounted in portrait 
   it holds across sessions. Muted, the skill doesn't speak, skips the progressive response and never
   opens the mic (same screen-closing problem); spoken-only answers (quantities, timers, errors) go in
   the callout box of the current screen. Only applies to devices with a screen.
+
+## Review 2026-11
+
+- **S2: one SSRF-safe fetch for user URLs (`lib/services/safe-fetch.ts`).** Page and photo imports
+  go through it. It's built on `node:http(s)` with a custom socket `lookup` rather than undici's
+  `Agent`: undici isn't a dependency (Next bundles a private copy), and the `lookup` hook gives the
+  same guarantee, the address validated is the address connected to, so DNS rebinding can't swap
+  it. Redirects are followed by hand (5 max, every hop re-validated), ports limited to
+  80/443/8080/8443, single-label and `.local/.lan/.internal`-style names refused, byte cap also
+  applied after decompression. Image downloads are capped at `MAX_UPLOAD_BYTES` (10 MB), the same
+  as a manual upload. `lib/services/youtube.ts` is untouched: its URLs are fixed Google/YouTube
+  hosts (the caption URL comes from YouTube's own API response, not from user input).

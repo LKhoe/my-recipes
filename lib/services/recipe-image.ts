@@ -3,7 +3,8 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { recipeImage } from "@/lib/db/schema";
 import { ImageValidationError, processAndStoreImage } from "@/lib/services/image";
-import { ALLOWED_EXTERNAL_IMAGE_HOSTS, MAX_PHOTOS_PER_RECIPE } from "@/lib/image-constants";
+import { safeFetch } from "@/lib/services/safe-fetch";
+import { ALLOWED_EXTERNAL_IMAGE_HOSTS, MAX_PHOTOS_PER_RECIPE, MAX_UPLOAD_BYTES } from "@/lib/image-constants";
 
 export type StoredRecipeImage = { id: string; path: string; order: number };
 
@@ -79,20 +80,22 @@ export async function attachImageFromUrl(
     return insertImage(recipeId, imageUrl, count);
   }
 
-  let res: Response;
+  let result;
   try {
-    res = await fetch(url, {
+    // Same size ceiling as a manual upload (MAX_UPLOAD_BYTES); the guard refuses internal addresses.
+    result = await safeFetch(url, {
       headers: { ...REMOTE_IMAGE_HEADERS, Referer: `${url.origin}/` },
-      redirect: "follow",
-      signal: AbortSignal.timeout(REMOTE_IMAGE_TIMEOUT_MS),
+      maxBytes: MAX_UPLOAD_BYTES,
+      onOverflow: "error",
+      timeoutMs: REMOTE_IMAGE_TIMEOUT_MS,
     });
   } catch {
     throw new ImageValidationError("Não foi possível buscar essa URL de imagem.");
   }
-  if (!res.ok) {
+  if (!result.ok) {
     throw new ImageValidationError("Não foi possível buscar essa URL de imagem.");
   }
-  const buffer = Buffer.from(await res.arrayBuffer());
-  const declared = res.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ?? "";
+  const buffer = result.body;
+  const declared = String(result.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase();
   return storeUploadedImage(recipeId, buffer, sniffImageType(buffer, declared), count);
 }

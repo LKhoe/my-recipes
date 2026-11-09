@@ -1,55 +1,35 @@
-const FETCH_TIMEOUT_MS = 15_000;
+import { SafeFetchError, UnsafeUrlError, safeFetch } from "@/lib/services/safe-fetch";
+
 const MAX_HTML_BYTES = 3_000_000;
 const USER_AGENT =
   "Mozilla/5.0 (compatible; MyRecipesBot/1.0; +https://github.com) recipe-import";
 
 export class PageFetchError extends Error {}
 
+/**
+ * Downloads a user-supplied page. Goes through safeFetch (SSRF guard: no private/internal
+ * addresses, validated redirects, timeout, size cap); the body is truncated at 3 MB.
+ */
 export async function fetchPageHtml(url: string): Promise<string> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
   try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        "User-Agent": USER_AGENT,
-        Accept: "text/html,application/xhtml+xml",
-      },
-      redirect: "follow",
+    const res = await safeFetch(url, {
+      headers: { "User-Agent": USER_AGENT, Accept: "text/html,application/xhtml+xml" },
+      maxBytes: MAX_HTML_BYTES,
+      onOverflow: "truncate",
     });
-
     if (!res.ok) {
       throw new PageFetchError(`Fetching ${url} failed with status ${res.status}`);
     }
-
-    const contentType = res.headers.get("content-type") ?? "";
+    const contentType = String(res.headers["content-type"] ?? "");
     if (!contentType.includes("html")) {
       throw new PageFetchError(`URL did not return HTML (content-type: ${contentType})`);
     }
-
-    const reader = res.body?.getReader();
-    if (!reader) return await res.text();
-
-    const decoder = new TextDecoder();
-    let html = "";
-    let bytes = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      bytes += value.byteLength;
-      if (bytes > MAX_HTML_BYTES) {
-        await reader.cancel();
-        break;
-      }
-      html += decoder.decode(value, { stream: true });
-    }
-    return html;
+    return res.body.toString("utf8");
   } catch (err) {
     if (err instanceof PageFetchError) throw err;
+    if (err instanceof UnsafeUrlError) throw new PageFetchError(`URL não permitida: ${err.message}`);
+    if (err instanceof SafeFetchError) throw new PageFetchError(`Could not fetch ${url}: ${err.message}`);
     throw new PageFetchError(`Could not fetch ${url}: ${(err as Error).message}`);
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
