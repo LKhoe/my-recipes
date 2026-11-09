@@ -1408,3 +1408,10 @@ From photos of the skill on the Echo Show 15, which is wall-mounted in portrait 
   payment, usb, bluetooth, serial and hid. Photo capture uses `<input type=file>` (not
   `getUserMedia`), so camera stays off safely. Nothing frames the app (Alexa APL loads images by
   URL, not pages; the only iframe is the app embedding YouTube). No CSP for now.
+
+- **O2: no migration generation in the Docker build.** `RUN npm run db:generate` is gone: it could
+  bake an uncommitted migration into the image or stop at an interactive prompt. `npm run db:check`
+  (`scripts/db-check.mjs`) generates into a temp copy with stdin closed and a 60 s timeout and
+  fails unless drizzle-kit explicitly says "No schema changes" (a rename prompt crashes it without
+  a failing exit code in this drizzle-kit version, so the message is what counts). It runs in the
+  builder stage, so a schema edit without a committed migration now fails the build.

@@ -17,9 +17,10 @@ COPY . .
 # COPY --from=builder /app/public doesn't fail if one is never added
 RUN mkdir -p public
 
-# Generate drizzle migrations before build (no-op if already committed, but keeps the image
-# self-sufficient if a migration was added without running db:generate locally)
-RUN npm run db:generate
+# Fail the build if lib/db/schema.ts has changes without a committed migration. It never
+# generates one into the image (an uncommitted migration shipping to production, or an interactive
+# drizzle-kit prompt hanging the build): db:check works on a temp copy, with stdin closed.
+RUN npm run db:check
 
 # Build args for NEXT_PUBLIC_ vars (must be available at build time)
 ARG NEXT_PUBLIC_APP_URL
