@@ -20,7 +20,9 @@
     "db:seed": "node --env-file-if-exists=.env.local --import tsx lib/db/seed.ts",
     "db:invite": "node --env-file-if-exists=.env.local scripts/create-invite.mjs",
     "photos:upload": "node --env-file-if-exists=.env.local scripts/upload-photos-to-s3.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "types:fresh": "rm -rf .next/types .next/dev/types && next typegen",
+    "check": "npm run types:fresh && npm run typecheck && npm run lint && npm test"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1161.0",

@@ -8,7 +8,9 @@ Pi deployment: `DEPLOY.md`; overview: `README.md`.
 
 ```bash
 npm run dev                # http://localhost:3000 (host port on the Pi is 3001)
-npm run typecheck && npm run lint && npm test
+npm run check              # fresh route types + typecheck + lint + test. Three test files are
+                           # integration tests that write to DATABASE_URL (unset = the fallback in
+                           # lib/db/index.ts): local Postgres must be up; never point it at the Pi
 npm run db:generate        # after editing lib/db/schema.ts — commit the migration
 npm run db:check           # fails if schema.ts has changes without a migration (also runs in the Docker build)
 npm run db:migrate         # applies migrations using .env.local
