@@ -15,7 +15,8 @@ export async function GET() {
   }
 
   // SPEC §4.9: "exports are logged".
-  console.log(`[backup] Export requested by ${session.user.email} at ${new Date().toISOString()}`);
+  // The user id, not the email: container logs are no place for personal data.
+  console.log(`[backup] Export requested by user ${session.user.id} at ${new Date().toISOString()}`);
 
   const webStream = Readable.toWeb(createBackupStream() as Readable) as ReadableStream;
   const date = formatDateISO(new Date());
